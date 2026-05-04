@@ -1,4 +1,4 @@
-﻿const $ = (id) => document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 
 let socket = null,
 	currentNodes = [],
@@ -1178,7 +1178,7 @@ function toggleHidMode() {
 	}
 	// Crosshair cursor in control mode
 	const cv = $("desktopView");
-	if (cv) cv.style.cursor = isCtrl ? "crosshair" : "default";
+	if (cv) cv.style.cursor = isCtrl ? "crosshair" : "default";`n`tdocument.body.classList.toggle("control-mode", isCtrl);
 	// Auto-hide HUD & toolbar in command mode for unobstructed view
 	const hud = document.querySelector(".remote-hud");
 	const toolbar = document.querySelector(".remote-toolbar");

@@ -2090,3 +2090,9 @@ body::after {
 #camContainer { pointer-events: auto !important; z-index: 10006 !important; }
 .remote-sidebar { z-index: 10007 !important; }
 
+
+/* MRL WARE: Prevent UI panels from blocking remote desktop clicks in Control Mode */
+body.control-mode .remote-hud-chip { pointer-events: none !important; }
+body.control-mode .remote-toolbar-item:not(#btnMode) { pointer-events: none !important; }
+body.control-mode .remote-sidebar > div { pointer-events: none !important; }
+body.control-mode #camContainer { pointer-events: none !important; }

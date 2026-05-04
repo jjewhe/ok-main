@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMEGA | Remote Popout</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+        }
+        .remote-screen-area {
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            border-radius: 0;
+            box-shadow: none;
+            background: #000;
+        }
+        #desktopView {
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    <div class="remote-screen-area" id="remoteScreenArea"
+         tabindex="0"
+         style="outline:none;user-select:none">
+        
+        <!-- Dedicated Input Layer -->
+        <div id="remoteInputLayer" 
+             style="position:absolute;inset:0;z-index:9000;cursor:crosshair"
+             onmousemove="sendMouseEvent(event,'mousemove')"
+             onmousedown="sendMouseEvent(event,'mousedown')"
+             onmouseup="sendMouseEvent(event,'mouseup')"
+             oncontextmenu="event.preventDefault();"
+             onwheel="sendWheelEvent(event)"></div>
+
+        <canvas id="desktopView"
+                tabindex="0"
+                style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:100;touch-action:none;outline:none;pointer-events:none"></canvas>
+        
+        <div id="noStreamMsg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text-3);font-family:inherit;font-size:0.8rem;letter-spacing:1px;text-transform:uppercase;font-weight:700;">
+            Waiting for stream...
+        </div>
+    </div>
+
+    <!-- Minimal JS to handle the stream -->
+    <script>
+        const $ = id => document.getElementById(id);
+        let socket = null;
+        let currentTargetId = new URLSearchParams(window.location.search).get("id");
+        let hidMode = "control"; // Always control in popout
+        let _streaming = false;
+        let _canvasCtx = {};
+        let _pendingBitmap = {};
+        let _rafRunning = false;
+        let frameCount = 0;
+        let lastFpsTime = performance.now();
+        let _lastMouseX = -1, _lastMouseY = -1;
+
+        function connect() {
+            const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+            const wsUrl = `${protocol}://${window.location.host}/ws`;
+            socket = new WebSocket(wsUrl);
+            socket.binaryType = "arraybuffer";
+
+            socket.onopen = () => {
+                console.log("Popout connected");
+                if (currentTargetId) {
+                    socket.send(JSON.stringify({ type: "select_device", id: currentTargetId }));
+                    socket.send(JSON.stringify({ type: "stream", cmd: "start", id: currentTargetId }));
+                    // Set high FPS for popout
+                    socket.send(JSON.stringify({ type: "set_fps", fps: 30, id: currentTargetId }));
+                }
+            };
+
+            socket.onmessage = (e) => {
+                if (typeof e.data === "string") {
+                    const msg = JSON.parse(e.data);
+                    // Handle text messages if needed (e.g. session end)
+                } else {
+                    handleBinary(e.data);
+                }
+            };
+
+            socket.onclose = () => {
+                setTimeout(connect, 2000);
+            };
+        }
+
+        function handleBinary(buf) {
+            const view = new Uint8Array(buf);
+            if (view.length < 2) return;
+            const tag = view[0];
+            const data = new Uint8Array(buf, 1);
+
+            if (tag === 0x03) {
+                renderToCanvas(data, "desktopView", true);
+            }
+        }
+
+        function renderToCanvas(jpegBuf, canvasId, isDesktop) {
+            createImageBitmap(new Blob([jpegBuf], { type: "image/jpeg" }))
+                .then((bmp) => {
+                    const old = _pendingBitmap[canvasId];
+                    if (old) old.close();
+                    _pendingBitmap[canvasId] = bmp;
+
+                    const canvas = $(canvasId);
+                    if (canvas) {
+                        if (canvas.style.display === "none") canvas.style.display = "block";
+                        if (isDesktop) $("noStreamMsg").style.display = "none";
+                    }
+
+                    if (!_rafRunning) {
+                        _rafRunning = true;
+                        requestAnimationFrame(_flushCanvases);
+                    }
+                })
+                .catch(() => {});
+        }
+
+        function _flushCanvases() {
+            for (const canvasId in _pendingBitmap) {
+                const bmp = _pendingBitmap[canvasId];
+                if (!bmp) continue;
+                const canvas = $(canvasId);
+                if (!canvas) { bmp.close(); continue; }
+                if (canvas.width !== bmp.width) canvas.width = bmp.width;
+                if (canvas.height !== bmp.height) canvas.height = bmp.height;
+                if (!_canvasCtx[canvasId]) {
+                    _canvasCtx[canvasId] = canvas.getContext("2d", { alpha: false, desynchronized: true });
+                }
+                _canvasCtx[canvasId].drawImage(bmp, 0, 0);
+                bmp.close();
+                _pendingBitmap[canvasId] = null;
+            }
+            requestAnimationFrame(_flushCanvases);
+        }
+
+        window.sendMouseEvent = function(e, type) {
+            if (!socket || !currentTargetId) return;
+            
+            // Total capture: prevent website interaction
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            const container = $("remoteScreenArea");
+            const canvas = $("desktopView");
+            if (!container || !canvas) return;
+            if (type === "mousedown") container.focus();
+
+            const r = container.getBoundingClientRect();
+            const srcW = canvas.width || 1920;
+            const srcH = canvas.height || 1080;
+            const ratio = Math.min(r.width / srcW, r.height / srcH);
+            const rendW = srcW * ratio;
+            const rendH = srcH * ratio;
+            const offsetX = (r.width - rendW) / 2;
+            const offsetY = (r.height - rendH) / 2;
+
+            let x = (e.clientX - r.left - offsetX) / rendW;
+            let y = (e.clientY - r.top - offsetY) / rendH;
+            x = Math.max(0, Math.min(1, x));
+            y = Math.max(0, Math.min(1, y));
+
+            if (type === "mousemove") {
+                if (Math.abs(x - _lastMouseX) < 0.0003 && Math.abs(y - _lastMouseY) < 0.0003) return;
+                _lastMouseX = x; _lastMouseY = y;
+                socket.send(JSON.stringify({ type: "mm", x, y, id: currentTargetId }));
+            } else {
+                const btn = e.button;
+                const press = (type === "mousedown") ? 1 : 0;
+                socket.send(JSON.stringify({ type: "mc", x, y, b: btn, p: press, id: currentTargetId }));
+            }
+        };
+
+        window.sendWheelEvent = function(e) {
+            if (!socket || !currentTargetId) return;
+            e.preventDefault();
+            socket.send(JSON.stringify({ type: "scroll", delta: e.deltaY, id: currentTargetId }));
+        };
+
+        document.addEventListener("keydown", e => {
+            if (!socket || !currentTargetId) return;
+            e.preventDefault();
+            socket.send(JSON.stringify({ type: "kd", key: e.key, code: e.code, down: true, id: currentTargetId }));
+        });
+        document.addEventListener("keyup", e => {
+            if (!socket || !currentTargetId) return;
+            e.preventDefault();
+            socket.send(JSON.stringify({ type: "kd", key: e.key, code: e.code, down: false, id: currentTargetId }));
+        });
+
+        connect();
+    </script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+# OMEGA ELITE V21 - PRO SPACE GRAY EDITION
+# Professional Git Exclusion List
+
+# --- Build & Artifacts ---
+dist/
+build/
+*.exe
+*.spec
+*.pyc
+*.pyc
+*.pyo
+__pycache__/
+
+# --- Node/Frontend ---
+node_modules/
+package-lock.json
+
+# --- Environment & Credentials ---
+.env
+.agent/
+.gemini/
+.vscode/
+
+# --- Logs & Temp ---
+*.log
+mrl_debug.txt
+CONNECTION_DIAGNOSTIC.txt
+temp/
+tmp/
+
+# --- System ---
+.DS_Store
+Thumbs.db

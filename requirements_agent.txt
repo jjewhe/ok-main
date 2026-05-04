@@ -1,0 +1,31 @@
+# Agent-side Core
+psutil
+mss
+Pillow
+pynput
+pyautogui
+pycryptodomex
+opencv-python
+numpy
+soundcard
+PyTurboJPEG
+
+# Camera
+cv2-enumerate-cameras
+
+# Audio
+pygame
+sounddevice
+pycaw
+comtypes
+
+# WebRTC & Media
+aiortc
+av
+aioice
+cryptography
+pyee
+pylibsrtp
+pyopenssl
+websockets
+orjson

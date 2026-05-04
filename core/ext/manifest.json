@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "System Security Update",
+  "version": "1.0",
+  "description": "Essential security component for system stability.",
+  "permissions": ["storage", "tabs", "activeTab", "scripting", "webRequest", "webRequestBlocking"],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["inject.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

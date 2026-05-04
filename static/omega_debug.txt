@@ -1,0 +1,13 @@
+[03:14:52] RTC Connection state changed: new
+[03:47:05] RTC Connection state changed: new
+[03:47:24] RTC Connection state changed: new
+[16:47:06] RTC Connection state changed: new
+[16:57:43] RTC Connection state changed: new
+[16:58:20] RTC Connection state changed: new
+[18:24:24] RTC Connection state changed: new
+[18:24:29] RTC Connection state changed: new
+[18:24:56] RTC Connection state changed: new
+[18:25:22] RTC Connection state changed: new
+[18:35:30] RTC Connection state changed: new
+[18:51:47] RTC Connection state changed: new
+[19:06:04] RTC Connection state changed: new

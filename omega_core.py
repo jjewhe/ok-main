@@ -862,10 +862,9 @@ async def mic_loop(ws):
                     def _audio_callback(indata, frames, time, status):
                         if getattr(st, "mic_active", False):
                             import numpy as np
-                            if indata.ndim > 1 and indata.shape[1] > 1:
-                                pcm = indata.mean(axis=1, dtype=np.int16).tobytes()
-                            else:
-                                pcm = indata.flatten().tobytes()
+                            # MRL fix: proper float32 -> int16 conversion
+                            mono = indata.mean(axis=1) if indata.ndim > 1 else indata.flatten()
+                            pcm = (mono * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
                             
                             # Feed WebSocket
                             asyncio.run_coroutine_threadsafe(
@@ -900,6 +899,35 @@ async def mic_loop(ws):
 
 async def desktop_loop(ws):
     """Independent desktop loopback using sounddevice WASAPI — 0x06 tag."""
+    # MRL fix: try soundcard first - far more reliable for WASAPI loopback on Windows
+    try:
+        import soundcard as sc
+        import numpy as np
+        loopbacks = [m for m in sc.all_microphones(include_loopback=True) if m.isloopback]
+        if loopbacks:
+            RATE_SC = 44100
+            CHUNK_SC = 1024
+            print(f"[AUDIO-DESK] soundcard loopback found: {loopbacks[0].name}")
+            while True:
+                if not getattr(st, "desktop_active", False):
+                    await asyncio.sleep(0.25)
+                    continue
+                try:
+                    with loopbacks[0].recorder(samplerate=RATE_SC, channels=1, blocksize=CHUNK_SC) as mic:
+                        while getattr(st, "desktop_active", False):
+                            data = mic.record(numframes=CHUNK_SC)
+                            mono = data.flatten()
+                            pcm = (mono * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
+                            asyncio.run_coroutine_threadsafe(
+                                ws.send(struct.pack("B", 0x06) + pcm), global_loop)
+                            await asyncio.sleep(0)
+                except Exception as e:
+                    log(f"[AUDIO-DESK] soundcard error: {e}")
+                    await asyncio.sleep(2)
+            return
+    except Exception as e:
+        log(f"[AUDIO-DESK] soundcard unavailable ({e}), falling back to sounddevice")
+
     import sounddevice as sd
 
     CHUNK = 2048
@@ -933,19 +961,17 @@ async def desktop_loop(ws):
                     def _desk_callback(indata, frames, time, status):
                         if getattr(st, "desktop_active", False):
                             import numpy as np
-                            # Mix down stereo loopback to mono int16 without corruption
-                            if indata.ndim > 1 and indata.shape[1] > 1:
-                                pcm = indata.mean(axis=1, dtype=np.int16).tobytes()
-                            else:
-                                pcm = indata.flatten().tobytes()
+                            # MRL fix: proper float32 -> int16 conversion
+                            mono = indata.mean(axis=1) if indata.ndim > 1 else indata.flatten()
+                            pcm = (mono * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
 
                             asyncio.run_coroutine_threadsafe(
                                 ws.send(struct.pack("B", 0x06) + pcm),
                                 global_loop
                             )
 
-                    # Note: WASAPI loopback requires exact samplerate matching the system format
-                    actual_rate = int(dev_info['default_samplerate'])
+                    # MRL fix: use 44100Hz to match browser AudioContext
+                    actual_rate = 44100
                     log(f"[AUDIO-DESK] Using rate {actual_rate}Hz for {ch}ch stream")
                     stream = sd.InputStream(
                         device=dev_idx, channels=ch, samplerate=actual_rate, 

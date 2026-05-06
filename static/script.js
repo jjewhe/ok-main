@@ -143,6 +143,17 @@ function initWebSocket() {
 	};
 }
 
+window.debugWS = () => {
+    console.log("--- WS DIAGNOSTICS ---");
+    console.log("Protocol:", location.protocol);
+    console.log("Host:", location.host);
+    console.log("Token Length:", (window.INITIAL_USER?.id || "").length);
+    console.log("Socket State:", socket ? socket.readyState : "NULL");
+    if (socket) {
+        console.log("Socket URL:", socket.url);
+    }
+};
+
 function setConnState(s) {
 	const dot = $("headerConnDot"),
 		txt = $("headerConnStatus");
@@ -161,6 +172,10 @@ function setConnState(s) {
 // â”€â”€ Messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function handleMsg(d) {
 	const t = d.t || d.type;
+	if (t === "handshake_init") {
+		console.log("[WS] Handshake Init received:", d.msg);
+		return;
+	}
 	handleReconResponse(d);
 	switch (t) {
 		case "devices": {

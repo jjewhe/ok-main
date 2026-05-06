@@ -225,6 +225,7 @@ async def websocket_endpoint(websocket: WebSocket):
         client_host = websocket.client.host if websocket.client else "unknown"
         logger.info(f"Connection received from {client_host}")
         await websocket.accept()
+        await websocket.send_text(orjson.dumps({"t": "handshake_init", "msg": "MRL Engine Awaiting Handshake"}).decode())
 
         # 1. Resolve User
         user = None
@@ -1595,7 +1596,10 @@ async def api_node_broadcast(request: Request):
     ))
     return {"sent": sent}
 
-# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/health")
+async def health():
+    return {"status": "ok", "time": time.time(), "build": SERVER_BUILD_ID[:8]}
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 

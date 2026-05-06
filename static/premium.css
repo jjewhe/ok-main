@@ -1,0 +1,60 @@
+/* ── MRL WARE PREMIUM STYLESHEET ── */
+:root {
+    --h: 224;
+    --bg-premium: hsla(var(--h), 25%, 4%, 0.95);
+    --accent-premium: hsl(184, 100%, 50%);
+    --violet-premium: hsl(272, 100%, 65%);
+    --glass-border: hsla(0, 0%, 100%, 0.08);
+    --premium-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.premium-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--premium-shadow);
+    transition: all 0.4s var(--ease-out-expo);
+}
+
+.premium-card:hover {
+    border-color: var(--accent-premium);
+    transform: translateY(-5px);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), 0 0 30px hsla(184, 100%, 50%, 0.1);
+}
+
+/* Aurora Background for Stat Cards */
+.stat-card.aurora::before {
+    content: "";
+    position: absolute;
+    inset: -50%;
+    background: radial-gradient(circle at center, var(--accent-dim), transparent 60%);
+    opacity: 0.3;
+    filter: blur(60px);
+    animation: aurora-move 10s infinite alternate;
+}
+
+@keyframes aurora-move {
+    from { transform: translate(-10%, -10%); }
+    to { transform: translate(10%, 10%); }
+}
+
+/* Vault Row Highlighting */
+.vault-row {
+    transition: background 0.2s ease;
+}
+.vault-row:hover {
+    background: hsla(184, 100%, 50%, 0.03);
+}
+
+/* Smooth Scrollbars */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { 
+    background: var(--border); 
+    border-radius: 10px; 
+}
+::-webkit-scrollbar-thumb:hover { 
+    background: var(--text-3); 
+}

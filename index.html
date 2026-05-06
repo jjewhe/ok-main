@@ -8,9 +8,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/premium.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body oncontextmenu="return false;">
+<canvas id="neuralCanvas" style="position:fixed;inset:0;pointer-events:none;z-index:0;opacity:0.4"></canvas>
 <aside class="sidebar">
     <a href="/" class="brand">
         <div class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><title>Icon</title><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
@@ -70,12 +72,12 @@
         <!-- Dashboard Intelligence Header -->
         <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:1.125rem;margin-bottom:1.5rem">
             <!-- Stat Cards -->
-            <div class="stat-card">
+            <div class="stat-card aurora">
                 <div class="stat-label">Active Nodes</div>
                 <div class="stat-value" id="statActiveNodes">0</div>
                 <div class="badge badge-teal">Live Uplink</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card aurora">
                 <div class="stat-label">Server Load</div>
                 <div class="stat-value" id="statServerLoad">—</div>
                 <div class="badge badge-blue">Optimized</div>
@@ -162,13 +164,13 @@
 
             <div style="flex-grow:1;overflow-y:auto;background:rgba(0,0,0,.2);">
                 <table style="width:100%;border-collapse:collapse;font-size:.75rem">
-                    <thead style="position:sticky;top:0;background:var(--surface);z-index:10;box-shadow:0 4px 10px rgba(0,0,0,0.5)">
-                        <tr style="color:var(--text-3);text-transform:uppercase;font-size:.65rem">
-                            <th style="padding:1rem;text-align:left;border-bottom:1px solid var(--border)">Target Node</th>
-                            <th style="padding:1rem;text-align:left;border-bottom:1px solid var(--border)">Type</th>
-                            <th style="padding:1rem;text-align:left;border-bottom:1px solid var(--border)">Platform / Site</th>
-                            <th style="padding:1rem;text-align:left;border-bottom:1px solid var(--border)">Identity / Data</th>
-                            <th style="padding:1rem;text-align:left;border-bottom:1px solid var(--border)">Time Extracted</th>
+                    <thead style="position:sticky;top:0;background:hsla(var(--h), 22%, 5%, 0.9);backdrop-filter:blur(10px);z-index:10;box-shadow:0 4px 20px rgba(0,0,0,0.5)">
+                        <tr style="color:var(--text-3);text-transform:uppercase;font-size:.6rem;letter-spacing:0.1em;font-weight:900">
+                            <th style="padding:1.25rem 1rem;text-align:left;border-bottom:1px solid var(--border)">Uplink Node</th>
+                            <th style="padding:1.25rem 1rem;text-align:left;border-bottom:1px solid var(--border)">Intelligence Type</th>
+                            <th style="padding:1.25rem 1rem;text-align:left;border-bottom:1px solid var(--border)">Origin / Sector</th>
+                            <th style="padding:1.25rem 1rem;text-align:left;border-bottom:1px solid var(--border)">Exfiltrated Data</th>
+                            <th style="padding:1.25rem 1rem;text-align:left;border-bottom:1px solid var(--border)">Timestamp</th>
                         </tr>
                     </thead>
                     <tbody id="globalVaultBody">
@@ -213,6 +215,21 @@
                 <button type="button" class="btn-primary" style="font-size:.78rem;padding:.45rem .875rem" onclick="adminLoadChat()">↻ Load</button>
             </div>
             <div id="adminChatList" style="max-height:380px;overflow-y:auto"></div>
+        </div>
+    </div>
+    
+    <!-- ── DIAGNOSTIC TICKER ── -->
+    <div style="position:fixed;bottom:0;left:var(--sidebar-w);right:0;height:28px;background:hsla(var(--h), 22%, 4%, 0.95);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 1.5rem;z-index:100;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:12px;white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--accent);letter-spacing:0.05em">
+            <span style="font-weight:900">DIAGNOSTIC TELEMETRY:</span>
+            <div id="diagTicker" style="display:flex;gap:24px;animation:ticker 40s linear infinite">
+                <span>[SYSTEM] NEURAL LINK STABLE</span>
+                <span>[NET] UPLINK OPTIMIZED</span>
+                <span>[SEC] ENCRYPTION LAYER ACTIVE</span>
+                <span>[NODE] SCANNING SUBORDINATE NETWORKS...</span>
+                <span>[AUTH] SESSION VERIFIED: OMEGA ELITE</span>
+                <span>[CORE] KERNEL VERSION 21.4-MRL ACTIVE</span>
+            </div>
         </div>
     </div>
 </main>
@@ -941,5 +958,52 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>/*USER_DATA_INJECTION*/</script>
 <script src="/static/script.js"></script>
+<script>
+// ── NEURAL LINK PARTICLES ──
+const canvas = document.getElementById('neuralCanvas');
+const ctx = canvas.getContext('2d');
+let particles = [];
+function initParticles() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    particles = [];
+    for(let i=0; i<60; i++) {
+        particles.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: (Math.random() - 0.5) * 0.5,
+            size: Math.random() * 2 + 1
+        });
+    }
+}
+function animateParticles() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(0, 240, 255, 0.5)';
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.05)';
+    particles.forEach((p, i) => {
+        p.x += p.vx; p.y += p.vy;
+        if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+        for(let j=i+1; j<particles.length; j++) {
+            let p2 = particles[j];
+            let dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+            if(dist < 150) {
+                ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+            }
+        }
+    });
+    requestAnimationFrame(animateParticles);
+}
+window.addEventListener('resize', initParticles);
+initParticles(); animateParticles();
+</script>
+<style>
+@keyframes ticker {
+    from { transform: translateX(100%); }
+    to { transform: translateX(-100%); }
+}
+</style>
 </body>
 </html>

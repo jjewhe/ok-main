@@ -1221,25 +1221,15 @@ function toggleHidMode() {
 let _panelCollapsed = false;
 function togglePanelCollapse() {
 	_panelCollapsed = !_panelCollapsed;
-	const header = $("remoteHeader");
+	const header = document.querySelector(".remote-toolbar");
 	const hud = document.querySelector(".remote-hud");
 	const tab = $("remoteHeaderTab");
-	const collapseBtn = document.querySelector(
-		'[onclick="togglePanelCollapse()"] span',
-	);
+	const cbtn = document.querySelector('[onclick="togglePanelCollapse()"] span');
 
-	if (_panelCollapsed) {
-		// Slide both off screen
-		if (header) header.style.transform = "translateY(-110%)";
-		if (hud) hud.style.transform = "translateX(-50%) translateY(150%)";
-		if (tab) tab.style.display = "flex";
-		if (collapseBtn) collapseBtn.innerHTML = "&#x25BC;"; // Down arrow
-	} else {
-		if (header) header.style.transform = "";
-		if (hud) hud.style.transform = "translateX(-50%)";
-		if (tab) tab.style.display = "none";
-		if (collapseBtn) collapseBtn.innerHTML = "&#x25B2;"; // Up arrow
-	}
+	if (header) header.classList.toggle("collapsed", _panelCollapsed);
+	if (hud) hud.classList.toggle("collapsed", _panelCollapsed);
+	if (tab) tab.style.display = _panelCollapsed ? "flex" : "none";
+	if (cbtn) cbtn.innerHTML = _panelCollapsed ? "&#x25BC;" : "&#x25B2;";
 }
 
 function switchMonitor(idx) {
@@ -4770,3 +4760,10 @@ const handleReconResponse = (data) => {
 		$("toolsResultWrap").style.display = "block";
 	}
 };
+
+// Global aliases for mismatched index.html calls
+window.closeRemote = _closeRemote;
+window.setStreamFps = _setStreamFps;
+window.togglePanel = _togglePanel;
+window.toggleFullscreen = _toggleFullscreen;
+window.setQuality = _setQuality;

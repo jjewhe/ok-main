@@ -5,8 +5,5 @@ jinja2
 python-multipart
 websockets
 aiosqlite
-authlib
-httpx
-itsdangerous
-psutil
-starlette
+opencv-python-headless
+numpy

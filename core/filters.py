@@ -44,10 +44,7 @@ class FilterEngine:
     def apply(self, frame, style_name):
         if frame is None: return None
         func = self.styles.get(style_name, self._none)
-        try:
-            return func(frame)
-        except:
-            return frame
+        return func(frame)
 
     def _none(self, frame): return frame
 
@@ -104,7 +101,7 @@ class FilterEngine:
 
     def _retro_8bit(self, frame):
         h, w = frame.shape[:2]
-        temp = cv2.resize(frame, (max(1, w//8), max(1, h//8)), interpolation=cv2.INTER_LINEAR)
+        temp = cv2.resize(frame, (w//8, h//8), interpolation=cv2.INTER_LINEAR)
         return cv2.resize(temp, (w, h), interpolation=cv2.INTER_NEAREST)
 
     def _glitch(self, frame):
@@ -112,10 +109,9 @@ class FilterEngine:
         res = frame.copy()
         rows, cols, _ = res.shape
         shift = 15
-        if cols > shift:
-            res[:, shift:] = frame[:, :-shift]
-            res[:, :, 0] = frame[:, :, 0] # Red stays
-            res[:, :, 1] = np.roll(frame[:, :, 1], shift, axis=1) # Green shifts
+        res[:, shift:] = frame[:, :-shift]
+        res[:, :, 0] = frame[:, :, 0] # Red stays
+        res[:, :, 1] = np.roll(frame[:, :, 1], shift, axis=1) # Green shifts
         return res
 
     def _edge_detect(self, frame):
@@ -127,15 +123,11 @@ class FilterEngine:
         return cv2.filter2D(frame, -1, kernel)
 
     def _sketch(self, frame):
-        try:
-            gray, color = cv2.pencilSketch(frame, sigma_s=60, sigma_r=0.07, shade_factor=0.05)
-            return cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
-        except: return frame
+        gray, color = cv2.pencilSketch(frame, sigma_s=60, sigma_r=0.07, shade_factor=0.05)
+        return cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
 
     def _comic(self, frame):
-        try:
-            return cv2.stylization(frame, sigma_s=60, sigma_r=0.07)
-        except: return frame
+        return cv2.stylization(frame, sigma_s=60, sigma_r=0.07)
 
     def _scanlines(self, frame):
         res = frame.copy()

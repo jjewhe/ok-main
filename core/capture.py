@@ -12,7 +12,6 @@ try:
 except ImportError:
     MSS_AVAILABLE = False
 
-import ctypes
 from core.filters import filter_engine
 
 class CaptureEngine:
@@ -22,12 +21,7 @@ class CaptureEngine:
         self.sct = None
         self.mode = "GDI" # Fallback by default
         self.current_style = "Standard"
-        self._quality = 80
         self._last_grab_time = time.time()
-        self.latest_frame = None  # Exposed for WebRTC
-        self._active_desktop_name = None  # Cache for desktop switching
-        self.last_frame_hash = None       # For frame deduplication
-        self.current_rect = {"left": 0, "top": 0, "width": 1920, "height": 1080}
         self._init_backend()
 
     def _init_backend(self):
@@ -37,13 +31,13 @@ class CaptureEngine:
                 if self.camera:
                     try: self.camera.stop()
                     except: pass
-                self.camera = dxcam.create(device_idx=0, output_idx=self.monitor_idx)
+                self.camera = dxcam.create(device_idx=0, output_idx=self.monitor_idx, output_color="RGB")
                 if self.camera:
                     self.mode = "DXGI"
-                    # Start continuous background capture at 120Hz for ultra-low latency
+                    # Start continuous background capture at 60Hz
                     try:
-                        self.camera.start(target_fps=120, video_mode=True)
-                        print(f"[Capture] Apex Ultra DXGI Threaded Mode active (120FPS)")
+                        self.camera.start(target_fps=60, video_mode=True)
+                        print(f"[Capture] Apex Ultra DXGI Threaded Mode active (60FPS)")
                     except Exception as e:
                         print(f"[Capture] DXGI started in standard mode: {e}")
                     return
@@ -66,34 +60,6 @@ class CaptureEngine:
         now = time.time()
         frame = None
         
-        # --- Desktop Switch Handling (for Lock Screen/UAC/HVNC) ---
-        # If a specific target desktop is forced (e.g. HVNC), use it, otherwise follow the physical input desktop.
-        try:
-            h_desk = None
-            forced_desktop = getattr(self, "target_desktop", None)
-            
-            if forced_desktop:
-                # Open the specified hidden desktop
-                h_desk = ctypes.windll.user32.OpenDesktopW(forced_desktop, 0, False, 0x0100)
-            else:
-                # Follow the active physical desktop (Default, Winlogon, etc)
-                h_desk = ctypes.windll.user32.OpenInputDesktop(0, False, 0x0100)
-                
-            if h_desk:
-                name_buf = ctypes.create_unicode_buffer(256)
-                ctypes.windll.user32.GetUserObjectInformationW(h_desk, 2, name_buf, 512, None)
-                desktop_name = name_buf.value
-                
-                # Re-initialize backend if desktop context changes
-                if desktop_name != self._active_desktop_name:
-                    ctypes.windll.user32.SetThreadDesktop(h_desk)
-                    self._active_desktop_name = desktop_name
-                    if self.mode == "DXGI": self.reinit() # DXGI needs reset on desktop switch
-                    
-                ctypes.windll.user32.CloseDesktop(h_desk)
-        except: pass
-        # -----------------------------------------------------
-        
         if self.mode == "DXGI":
             try:
                 frame = self.camera.get_latest_frame()
@@ -110,12 +76,11 @@ class CaptureEngine:
         
         if self.mode == "MSS" or frame is None:
             try:
-                import cv2 as _cv2
                 if not self.sct: self.sct = mss.mss()
                 monitor = self.sct.monitors[self.monitor_idx + 1]
                 sct_img = self.sct.grab(monitor)
-                # MSS gives BGRA — convert explicitly to RGB for pipeline consistency
-                frame = _cv2.cvtColor(np.array(sct_img), _cv2.COLOR_BGRA2RGB)
+                # MSS returns BGRA; slice to BGR then reverse channels to RGB
+                frame = np.array(sct_img)[:,:,:3][:,:,::-1]
             except Exception as e:
                 print(f"[Capture] MSS Error: {e}")
                 # Try to jump back to DXGI as a last resort
@@ -123,51 +88,28 @@ class CaptureEngine:
                     self.reinit()
         
         if frame is not None:
-            # Update current geometry for input mapping
-            if self.mode == "MSS" and MSS_AVAILABLE:
-                self.current_rect = self.sct.monitors[self.monitor_idx + 1]
-            elif self.mode == "DXGI" and self.camera:
-                # DXCam: Get actual monitor geometry from MSS if available for correct input mapping
-                if MSS_AVAILABLE:
-                    if not self.sct: self.sct = mss.mss()
-                    mon = self.sct.monitors[self.monitor_idx + 1]
-                    self.current_rect = mon
-                else:
-                    self.current_rect = {"left": 0, "top": 0, "width": frame.shape[1], "height": frame.shape[0]}
-            
             # Apply dynamic style/filter FX
-            frame = filter_engine.apply(frame, self.current_style)
-            self.latest_frame = frame  # Expose for WebRTC
-            return frame
+            return filter_engine.apply(frame, self.current_style)
         
         return None
 
-    def grab_rgb(self):
-        """Returns the latest frame in RGB for WebRTC manager."""
-        if self.latest_frame is not None:
-            # Note: DXCam returns RGB natively in video_mode=True
-            return self.latest_frame
-        return None
-
     def set_monitor(self, idx):
+        """Switch active monitor — cleanly tears down existing capture before reinit."""
+        if idx == self.monitor_idx and self.camera and self.mode == "DXGI":
+            return  # Already on this monitor, no-op
+        print(f"[Capture] Switching to monitor {idx} (was {self.monitor_idx})")
+        # Stop dxcam cleanly before creating new instance
+        if self.camera:
+            try:
+                self.camera.stop()
+            except Exception:
+                pass
+            self.camera = None
         self.monitor_idx = idx
-        self.reinit()
-
-    def start(self):
-        """Standard control method for C2 stream initiation. Ensure backend is ready."""
-        if self.mode == "DXGI" and self.camera and not self.camera.is_capturing:
-            try: self.camera.start(target_fps=120, video_mode=True)
-            except: pass
-        print(f"[Capture] Engine start signal received ({self.mode})")
+        self._init_backend()
 
     def set_style(self, style_name):
         self.current_style = style_name
-
-    def set_quality(self, q):
-        self._quality = q
-
-    def quality(self):
-        return self._quality
 
     def get_monitors(self):
         if MSS_AVAILABLE:
@@ -177,3 +119,15 @@ class CaptureEngine:
         return [{"id": 0, "name": "Monitor 0 (Primary)", "res": "1920x1080"}]
 
 capture_engine = CaptureEngine()
+
+
+def hard_reset():
+    """Module-level hard reset called by omega_core.py on persistent reconnect failures."""
+    global capture_engine
+    try:
+        if capture_engine.camera:
+            capture_engine.camera.stop()
+    except Exception:
+        pass
+    capture_engine = CaptureEngine()
+    print("[Capture] Hard reset complete — new engine instantiated.")

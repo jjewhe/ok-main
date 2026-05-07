@@ -1,4 +1,4 @@
-import os, random, string, zlib, lzma, base64
+import random, string, zlib, lzma, base64
 
 class PyObfuscator:
     """OMEGA: Advanced Polymorphic Engine for binary-level stealth."""

